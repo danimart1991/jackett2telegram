@@ -1,4 +1,4 @@
-![Jackett RSS to Telegram Bot logo](/docs/images/logo.png)
+![Jackett RSS to Telegram Bot logo](https://github.com/danimart1991/jackettrss-to-telegrambot/blob/main/docs/images/logo.png?raw=true)
 
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/danimart1991/jackettrss-to-telegrambot)](https://github.com/danimart1991/jackettrss-to-telegrambot/releases)
 [![GitHub last commit](https://img.shields.io/github/last-commit/danimart1991/jackettrss-to-telegrambot)](https://github.com/danimart1991/jackettrss-to-telegrambot/commits)
@@ -15,7 +15,7 @@
 
 A **self-hosted Telegram Python Bot** that dumps posts from **Jackett RSS feeds to a Telegram** chat. Based on [**RSS to Telegram bot**](https://github.com/BoKKeR/RSS-to-Telegram-Bot) by [_BoKKeR_](https://github.com/BoKKeR) (Thanks for your effort).
 
-![Image of the chat](/docs/images/example.png)
+![Image of the chat](https://github.com/danimart1991/jackettrss-to-telegrambot/blob/main/docs/images/example.png?raw=true)
 
 ## Requirements
 
@@ -81,4 +81,4 @@ Send `/help` to the bot to get this message:
 
 You could get the **Jackett RSS Feed Url** using the action button in Indexers list:
 
-![Jackett RSS Feed Button](/docs/images/rssfeed.png)
+![Jackett RSS Feed Button](https://github.com/danimart1991/jackettrss-to-telegrambot/blob/main/docs/images/rssfeed.png?raw=true)
