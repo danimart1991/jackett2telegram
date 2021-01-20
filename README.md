@@ -33,7 +33,7 @@ $ docker create \
   -e DELAY=60 \
   -e TOKEN=TelegramBotToken \
   -e CHATID=TelegramBotChatID \
-  -v /path/to/host/config:/config \
+  -v /path/to/host/config:/app/config \
   --restart unless-stopped \
   danimart1991/jackettrss-to-telegrambot
 ```
