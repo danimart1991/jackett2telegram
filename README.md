@@ -1,12 +1,12 @@
-![Jackett RSS to Telegram Bot logo](https://github.com/danimart1991/jackettrss-to-telegrambot/blob/main/docs/images/logo.png?raw=true)
+![Jackett RSS to Telegram Bot logo](https://github.com/danimart1991/jackett2telegram/blob/main/docs/images/logo.png?raw=true)
 
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/danimart1991/jackettrss-to-telegrambot)](https://github.com/danimart1991/jackettrss-to-telegrambot/releases)
-[![GitHub last commit](https://img.shields.io/github/last-commit/danimart1991/jackettrss-to-telegrambot)](https://github.com/danimart1991/jackettrss-to-telegrambot/commits)
-[![License](https://img.shields.io/github/license/danimart1991/jackettrss-to-telegrambot)](https://github.com/danimart1991/jackettrss-to-telegrambot/blob/main/LICENSE)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/danimart1991/jackett2telegram)](https://github.com/danimart1991/jackett2telegram/releases)
+[![GitHub last commit](https://img.shields.io/github/last-commit/danimart1991/jackett2telegram)](https://github.com/danimart1991/jackett2telegram/commits)
+[![License](https://img.shields.io/github/license/danimart1991/jackett2telegram)](https://github.com/danimart1991/jackett2telegram/blob/main/LICENSE)
 
-[![Docker Cloud Build](https://img.shields.io/docker/cloud/build/danimart1991/jackettrss-to-telegrambot)](https://hub.docker.com/r/danimart1991/jackettrss-to-telegrambot)
-[![Docker Pulls](https://img.shields.io/docker/pulls/danimart1991/jackettrss-to-telegrambot)](https://hub.docker.com/r/danimart1991/jackettrss-to-telegrambot)
-[![Docker Stars](https://img.shields.io/docker/stars/danimart1991/jackettrss-to-telegrambot)](https://hub.docker.com/r/danimart1991/jackettrss-to-telegrambot)
+[![Docker Cloud Build](https://img.shields.io/docker/cloud/build/danimart1991/jackett2telegram)](https://hub.docker.com/r/danimart1991/jackett2telegram)
+[![Docker Pulls](https://img.shields.io/docker/pulls/danimart1991/jackett2telegram)](https://hub.docker.com/r/danimart1991/jackett2telegram)
+[![Docker Stars](https://img.shields.io/docker/stars/danimart1991/jackett2telegram)](https://hub.docker.com/r/danimart1991/jackett2telegram)
 
 [![Tip Me via PayPal](https://img.shields.io/badge/PayPal-tip%20me-blue?logo=paypal&style=flat)](https://www.paypal.me/danimart1991)
 [![Sponsor Me via GitHub](https://img.shields.io/badge/GitHub-sponsor%20me-blue?logo=github&style=flat)](https://github.com/sponsors/danimart1991)
@@ -15,7 +15,7 @@
 
 A **self-hosted Telegram Python Bot** that dumps posts from **Jackett RSS feeds to a Telegram** chat. Based on [**RSS to Telegram bot**](https://github.com/BoKKeR/RSS-to-Telegram-Bot) by [_BoKKeR_](https://github.com/BoKKeR) (Thanks for your effort).
 
-![Image of the chat](https://github.com/danimart1991/jackettrss-to-telegrambot/blob/main/docs/images/example.png?raw=true)
+![Image of the chat](https://github.com/danimart1991/jackett2telegram/blob/main/docs/images/example.png?raw=true)
 
 ## Requirements
 
@@ -29,13 +29,13 @@ Warning! Without chatID the bot wont be able to send automated messages and will
 
 ```bash
 $ docker create \
-  --name=rss.to.telegram \
+  --name=jackett2telegram \
   -e DELAY=60 \
   -e TOKEN=TelegramBotToken \
   -e CHATID=TelegramBotChatID \
   -v /path/to/host/config:/app/config \
   --restart unless-stopped \
-  danimart1991/jackettrss-to-telegrambot
+  danimart1991/jackett2telegram
 ```
 
 ## Manual Installation
@@ -54,7 +54,7 @@ Python 3.X
 5. Run the script with:
 
     ```bash
-    python jackettrss_to_telegrambot.py
+    python jackett2telegram.py
     ```
 
 ## Usage
@@ -77,8 +77,8 @@ Send `/help` to the bot to get this message:
 >
 > The current chatId is: 123XXXXXXX.
 >
-> If you like the project, star it on DockerHub(https://hub.docker.com/r/danimart1991/jackettrss-to-telegrambot).
+> If you like the project, star it on DockerHub(https://hub.docker.com/r/danimart1991/jackett2telegram).
 
 You could get the **Jackett RSS Feed Url** using the action button in Indexers list:
 
-![Jackett RSS Feed Button](https://github.com/danimart1991/jackettrss-to-telegrambot/blob/main/docs/images/rssfeed.png?raw=true)
+![Jackett RSS Feed Button](https://github.com/danimart1991/jackett2telegram/blob/main/docs/images/rssfeed.png?raw=true)

@@ -149,7 +149,7 @@ def cmd_help(update: Update, context: CallbackContext):
     if not (its_me(update)):
         return
     update.effective_message.reply_markdown_v2(
-        "*Jackett RSS to Telegram bot*" +
+        "*Jackett RSS to Telegram Bot*" +
         "\n\nAfter successfully adding a Jackett RSS link, the bot starts fetching the feed every "
         + str(delay) + " seconds\. \(This can be set\)" +
         "\n\nTitles are used to easily manage RSS feeds and need to contain only one word\." +
@@ -160,7 +160,7 @@ def cmd_help(update: Update, context: CallbackContext):
         "\n\- `/list` Lists all the titles and the Jackett RSS links from the DB\." +
         "\n\- `/test http://www\.JACKETTRSSURL\.com` Inbuilt command that fetches a post \(usually latest\) from a Jackett RSS\." +
         "\n\nThe current chatId is: " + str(update.message.chat.id) + "\." +
-        "\n\nIf you like the project, star it on [DockerHub]\(https://hub\.docker\.com/r/danimart1991/jackettrss\-to\-telegrambot\)\.")
+        "\n\nIf you like the project, star it on [DockerHub](https://hub\.docker\.com/r/danimart1991/jackett2telegram)\.")
 
 
 def rss_monitor(context: CallbackContext):

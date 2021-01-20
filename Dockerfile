@@ -15,4 +15,4 @@ ENV CHATID X
 ENV DELAY 60
 
 # Run app.py when the container launches
-CMD ["python", "jackettrss_to_telegrambot.py"]
+CMD ["python", "jackett2telegram.py"]
