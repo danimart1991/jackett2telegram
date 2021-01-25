@@ -169,29 +169,31 @@ def rss_monitor(context: CallbackContext):
         response = requests.get(url_list[0])
         root = ElementTree.fromstring(response.content)
         items = root.find('channel').findall('item')
-        items.sort(reverse=True, key=lambda item: pubDate_to_datetime(
-            item.find('pubDate').text))
-        new_pubdate = items[0].find('pubDate').text
-        new_pubdate_date = pubDate_to_date(new_pubdate)
-        filteredItems = filter(lambda item: pubDate_to_date(
-            item.find('pubDate').text) == new_pubdate_date, items)
+        last_pubdate_datetime = pubDate_to_datetime(url_list[1])
+        filteredItems = filter(
+            lambda item: pubDate_to_datetime(item.find('pubDate').text) >= last_pubdate_datetime, items)
+        sortedFilteredItems = sorted(
+            filteredItems, key=lambda item: pubDate_to_datetime(item.find('pubDate').text))
 
-        last_pubdate_date = pubDate_to_date(url_list[1])
-        if (last_pubdate_date > new_pubdate_date):
-            return
-
-        last_items = []
-        if (last_pubdate_date == new_pubdate_date):
+        if sortedFilteredItems:
             last_items = eval(url_list[2])
+            for item in sortedFilteredItems:
+                item_guid = item.find('guid').text
+                if item_guid not in last_items:
+                    last_items.append(item_guid)
+                    try:
+                        jackettitem_to_telegram(context, item, name)
+                    except:
+                        print("ERROR: Can't send message to Telegram.")
 
-        for item in filteredItems:
-            item_guid = item.find('guid').text
-            if item_guid not in last_items:
-                jackettitem_to_telegram(context, item, name)
-                last_items.append(item_guid)
+            itemsCount = len(items)
+            while (len(last_items) > itemsCount):
+                last_items.pop(0)
 
-        sqlite_write((name), (url_list[0]), (new_pubdate), (str(last_items)))
-        rss_load()
+            new_pubdate = sortedFilteredItems[-1].find('pubDate').text
+            sqlite_write((name), (url_list[0]),
+                         (new_pubdate), (str(last_items)))
+            rss_load()
 
 
 def cmd_test(update: Update, context: CallbackContext):
@@ -221,10 +223,6 @@ def cmd_test(update: Update, context: CallbackContext):
 
 def pubDate_to_datetime(pubDate: str):
     return datetime.strptime(pubDate, "%a, %d %b %Y %H:%M:%S %z")
-
-
-def pubDate_to_date(pubDate: str):
-    return pubDate_to_datetime(pubDate).date()
 
 
 def parse_downloadvolumefactor(value: float):
