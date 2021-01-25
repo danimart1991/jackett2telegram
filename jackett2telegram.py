@@ -118,7 +118,7 @@ def cmd_rss_add(update: Update, context: CallbackContext):
                  items[0].find('pubDate').text, str([]))
     rss_load()
     update.effective_message.reply_text(
-        "added \nTITLE: %s\nRSS: %s" % (context.args[0], context.args[1]))
+        "Added: %s\n%s" % (context.args[0], context.args[1]))
 
 
 def cmd_rss_remove(update: Update, context: CallbackContext):
@@ -131,7 +131,8 @@ def cmd_rss_remove(update: Update, context: CallbackContext):
         c.execute("SELECT count(*) FROM rss WHERE name = ?", q)
         res = c.fetchall()[0][0]
         if not (int(res) == 1):
-            update.effective_message.reply_text("ERROR: Jackett RSS not found.")
+            update.effective_message.reply_text(
+                "ERROR: Jackett RSS not found.")
             return
         c.execute("DELETE FROM rss WHERE name = ?", q)
         conn.commit()
@@ -288,7 +289,7 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
         elif (torznabattr_name == "peers"):
             peers = torznabattr.get('value')
         elif (torznabattr_name == "coverurl"):
-            coverurl = torznabattr.get('value').split('&')[0]
+            coverurl = torznabattr.get('value')
 
     icondownloadvolumefactor = "\|" + \
         downloadvolumefactor[:1] if len(downloadvolumefactor[:1]) == 1 else ""
