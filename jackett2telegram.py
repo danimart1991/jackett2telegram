@@ -229,13 +229,13 @@ def parse_downloadvolumefactor(value: float):
     if (value == 0):
         return "🔥 FREELEECH 🔥\n"
     elif (value == 0.5):
-        return "⭐️ 50% DL ⭐️\n"
+        return "🌟 50% DOWNLOAD 🌟\n"
     return ""
 
 
 def parse_uploadvolumefactor(value: float):
     if (value > 1):
-        return "💎 " + str(int(value*100)) + "% UL 💎"
+        return "💎 " + str(int(value*100)) + "% UPLOAD 💎"
     return ""
 
 
@@ -296,7 +296,7 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
 
     message = (type + icondownloadvolumefactor + iconuploadvolumefactor + ' \- *' + title + "* by " + trackerName +
                "\n\n" +
-               "⬆ " + seeders + " ⬇ " + peers + " 💾 " + grabs + " 🗜 " + size +
+               "📤 " + seeders + " 📥 " + peers + " 💾 " + grabs + " 🗜 " + size +
                "\n\n" +
                downloadvolumefactor +
                uploadvolumefactor)
