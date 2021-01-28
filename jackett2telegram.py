@@ -181,10 +181,7 @@ def rss_monitor(context: CallbackContext):
                 item_guid = item.find('guid').text
                 if item_guid not in last_items:
                     last_items.append(item_guid)
-                    try:
-                        jackettitem_to_telegram(context, item, name)
-                    except:
-                        print("ERROR: Can't send message to Telegram.")
+                    jackettitem_to_telegram(context, item, name)
 
             itemsCount = len(items)
             while (len(last_items) > itemsCount):
@@ -239,7 +236,7 @@ def parse_uploadvolumefactor(value: float):
     return ""
 
 
-def parse_type(value: int):
+def parse_typeIcon(value: int):
     type = str(value)[:1]
     if (type == "1"):
         return "🎮"
@@ -262,15 +259,18 @@ def parse_type(value: int):
 
 def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element, rssName: str = None):
     coverurl = None
-    uploadvolumefactor = ""
-    downloadvolumefactor = ""
+    title = helpers.escape_markdown(item.find('title').text, 2)
+    category = item.find('category').text
+    icons = [parse_typeIcon(category)]
+    trackerName = helpers.escape_markdown(
+        rssName or item.find('jackettindexer').text, 2)
+    externalLinks = []
     seeders = "\-"
     peers = "\-"
     grabs = item.find('grabs').text if item.find('grabs') else "\-"
-    title = helpers.escape_markdown(item.find('title').text, 2)
-    type = parse_type(item.find('category').text)
-    trackerName = helpers.escape_markdown(
-        rssName or item.find('jackettindexer').text, 2)
+    uploadvolumefactor = ""
+    downloadvolumefactor = ""
+
     size = helpers.escape_markdown(
         str(round(float(item.find('size').text)/1073741824, 2)) + "GB", 2)
 
@@ -279,22 +279,34 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
         if (torznabattr_name == "downloadvolumefactor"):
             downloadvolumefactor = parse_downloadvolumefactor(
                 float(torznabattr.get('value')))
+            if downloadvolumefactor:
+                icons.append(downloadvolumefactor[:1])
         elif (torznabattr_name == "uploadvolumefactor"):
             uploadvolumefactor = parse_uploadvolumefactor(
                 float(torznabattr.get('value')))
+            if uploadvolumefactor:
+                icons.append(uploadvolumefactor[:1])
         elif (torznabattr_name == "seeders"):
             seeders = torznabattr.get('value')
         elif (torznabattr_name == "peers"):
             peers = torznabattr.get('value')
         elif (torznabattr_name == "coverurl"):
             coverurl = torznabattr.get('value')
+        elif (torznabattr_name == "imdbid"):
+            externalLinks.append(
+                "[*IMDb*](https://www.imdb.com/title/" + torznabattr.get('value') + ")")
+        elif (torznabattr_name == "tmdbid"):
+            type = None
+            if str(category)[:1] == "2":
+                type = "movie"
+            elif str(category)[:1] == "5":
+                type = "tv"
+            if type:
+                externalLinks.append(
+                    "[*TMDb*](https://www.themoviedb.org/" + type + "/" + torznabattr.get('value') + ")")
 
-    icondownloadvolumefactor = "\|" + \
-        downloadvolumefactor[:1] if len(downloadvolumefactor[:1]) == 1 else ""
-    iconuploadvolumefactor = "\|" + \
-        uploadvolumefactor[:1] if len(uploadvolumefactor[:1]) == 1 else ""
-
-    message = (type + icondownloadvolumefactor + iconuploadvolumefactor + ' \- *' + title + "* by " + trackerName +
+    message = ("\|".join(icons) + " \- " + title + " by _" + trackerName + "_" +
+               ("\n📌 " + "\|".join(externalLinks) if externalLinks else "") +
                "\n\n" +
                "📤 " + seeders + " 📥 " + peers + " 💾 " + grabs + " 🗜 " + size +
                "\n\n" +
