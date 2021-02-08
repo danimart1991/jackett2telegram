@@ -2,12 +2,15 @@ import logging
 import requests
 import os
 import sqlite3
+import string
+import unicodedata
 import xml.etree.ElementTree as ElementTree
 from datetime import datetime
 from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler
 from telegram.utils import helpers
+from urllib import parse
 
 Path("config").mkdir(parents=True, exist_ok=True)
 
@@ -34,7 +37,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 
 def its_me(update: Update):
-    return str(update.message.chat.id) == chatid
+    return str(update.effective_chat.id) == chatid
 
 # SQLITE
 
@@ -294,7 +297,8 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
             basecoverurl = torznabattr.get('value')
             if (basecoverurl):
                 if (basecoverurl.find("images.weserv.nl") != -1):
-                    coverurl = '&'.join(basecoverurl.split('&')[:-1]) + "&w=180&h=270"
+                    coverurl = '&'.join(basecoverurl.split('&')[
+                                        :-1]) + "&w=180&h=270"
                 else:
                     coverurl = "https://images.weserv.nl/?url=" + basecoverurl + "&w=180&h=270"
         elif (torznabattr_name == "imdbid"):
@@ -322,6 +326,9 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
         [
             InlineKeyboardButton("Link", url=item.find('guid').text),
             InlineKeyboardButton(".Torrent", url=item.find('link').text)
+        ],
+        [
+            InlineKeyboardButton("To Blackhole", callback_data='1')
         ]
     ]
 
@@ -333,6 +340,36 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
     else:
         context.bot.send_message(
             chatid, message, reply_markup=reply_markup, parse_mode="MARKDOWNV2")
+
+
+def cbq_to_blackhole(update: Update, context: CallbackContext):
+    if not (its_me(update)):
+        return
+
+    query = update.callback_query
+    try:
+        query.answer()
+    except:
+        pass
+
+    torrent_url = update.effective_message.reply_markup.inline_keyboard[0][1].url
+    if (torrent_url):
+        torrent_file = parse.parse_qs(
+            parse.urlparse(torrent_url).query)['file'][0]
+        if (torrent_file):
+            torrent_data = requests.get(torrent_url)
+            base_dir = os.getcwd()
+            backhole_dir = os.path.join(base_dir, "blackhole")
+            os.makedirs(backhole_dir)
+            with open(os.path.join(backhole_dir, (torrent_file + ".torrent").replace('+', ' ')), 'wb') as file:
+                file.write(torrent_data.content)
+            message = "Movie Downloaded to Blackhole\."
+        else:
+            message = "Can\'t obtain \.Torrent file name\."
+    else:
+        message = "Can\'t obtain \.Torrent url to download\."
+
+    update.effective_message.reply_text(message, parse_mode="MARKDOWNV2")
 
 # Main
 
@@ -347,6 +384,7 @@ def main():
     dp.add_handler(CommandHandler("test", cmd_test, ))
     dp.add_handler(CommandHandler("list", cmd_rss_list))
     dp.add_handler(CommandHandler("remove", cmd_rss_remove))
+    dp.add_handler(CallbackQueryHandler(cbq_to_blackhole))
 
     # try to create a database if missing
     try:
