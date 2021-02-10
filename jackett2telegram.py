@@ -6,13 +6,18 @@ import string
 import unicodedata
 import xml.etree.ElementTree as ElementTree
 from datetime import datetime
-from pathlib import Path
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler
 from telegram.utils import helpers
 from urllib import parse
 
-Path("config").mkdir(parents=True, exist_ok=True)
+blackhole_path = os.path.join(os.path.abspath(
+    os.path.dirname(__file__)), "blackhole")
+config_path = os.path.join(os.path.abspath(
+    os.path.dirname(__file__)), "config")
+db_path = os.path.join(config_path, "rss.db")
+os.makedirs(blackhole_path, exist_ok=True)
+os.makedirs(config_path, exist_ok=True)
 
 # Docker env
 if os.environ.get('TOKEN'):
@@ -30,27 +35,25 @@ if Token == "X":
 ns = {'torznab': 'http://torznab.com/schemas/2015/feed'}
 rss_dict = {}
 
+valid_filename_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
+char_limit = 255
+
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 
-# Telegram
-
-
-def its_me(update: Update):
-    return str(update.effective_chat.id) == chatid
 
 # SQLITE
 
 
 def init_sqlite():
-    conn = sqlite3.connect('config/rss.db')
+    conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS rss (name text PRIMARY KEY, link text, last_pubdate text, last_items text)''')
 
 
 def sqlite_connect():
     global conn
-    conn = sqlite3.connect('config/rss.db', check_same_thread=False)
+    conn = sqlite3.connect(db_path, check_same_thread=False)
 
 
 def sqlite_load_all():
@@ -328,7 +331,7 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
             InlineKeyboardButton(".Torrent", url=item.find('link').text)
         ],
         [
-            InlineKeyboardButton("To Blackhole", callback_data='1')
+            InlineKeyboardButton("To Blackhole", callback_data='blackhole')
         ]
     ]
 
@@ -340,6 +343,12 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
     else:
         context.bot.send_message(
             chatid, message, reply_markup=reply_markup, parse_mode="MARKDOWNV2")
+
+
+# Utils
+
+def its_me(update: Update):
+    return str(update.effective_chat.id) == chatid
 
 
 def cbq_to_blackhole(update: Update, context: CallbackContext):
@@ -357,19 +366,36 @@ def cbq_to_blackhole(update: Update, context: CallbackContext):
         torrent_file = parse.parse_qs(
             parse.urlparse(torrent_url).query)['file'][0]
         if (torrent_file):
+            torrent_file = clean_filename(torrent_file + ".torrent")
             torrent_data = requests.get(torrent_url)
-            base_dir = os.getcwd()
-            backhole_dir = os.path.join(base_dir, "blackhole")
-            os.makedirs(backhole_dir)
-            with open(os.path.join(backhole_dir, (torrent_file + ".torrent").replace('+', ' ')), 'wb') as file:
-                file.write(torrent_data.content)
-            message = "Movie Downloaded to Blackhole\."
+            if torrent_data and torrent_data.content:
+                with open(os.path.join(blackhole_path, torrent_file), 'wb') as file:
+                    file.write(torrent_data.content)
+                message = "Movie Downloaded to Blackhole\."
+            else:
+                message = "Can\'t obtain \.Torrent file data\."
         else:
             message = "Can\'t obtain \.Torrent file name\."
     else:
         message = "Can\'t obtain \.Torrent url to download\."
 
     update.effective_message.reply_text(message, parse_mode="MARKDOWNV2")
+
+
+def clean_filename(filename, whitelist=valid_filename_chars, replace=' '):
+    # replace spaces
+    for r in replace:
+        filename = filename.replace(r, '_')
+
+    # keep only valid ascii chars
+    cleaned_filename = unicodedata.normalize(
+        'NFKD', filename).encode('ASCII', 'ignore').decode()
+
+    # keep only whitelisted chars
+    cleaned_filename = ''.join(c for c in cleaned_filename if c in whitelist)
+    if len(cleaned_filename) > char_limit:
+        print("Warning, filename truncated because it was over {}. Filenames may no longer be unique".format(char_limit))
+    return cleaned_filename[:char_limit]
 
 # Main
 
