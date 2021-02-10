@@ -23,7 +23,7 @@ A Telegram Bot is needed that the script will connect to.
 
 You could use [this post](https://www.danielmartingonzalez.com/en/home-assistant-notifications-on-telegram/) to create your own with the [BotFather Telegram Bot](https://telegram.me/botfather).
 
-Warning! Without chatID the bot wont be able to send automated messages and will only be able to respond to messages.
+> Warning! Without chatID the bot wont be able to send automated messages and will only be able to respond to messages.
 
 ## Docker Installation
 
@@ -31,9 +31,10 @@ Warning! Without chatID the bot wont be able to send automated messages and will
 $ docker create \
   --name=jackett2telegram \
   -e DELAY=60 \
-  -e TOKEN=TelegramBotToken \
-  -e CHATID=TelegramBotChatID \
-  -v /path/to/host/config:/app/config \
+  -e TOKEN={telegram_bot_token} \
+  -e CHATID={telegram_bot_chatid} \
+  -v {/path/to/host/config}:/app/config \
+  -v {/path/to/host/blackhole}:/app/blackhole \
   --restart unless-stopped \
   danimart1991/jackett2telegram
 ```
