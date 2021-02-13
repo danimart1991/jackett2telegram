@@ -337,12 +337,17 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    if (coverurl):
-        context.bot.send_photo(chatid, coverurl, message,
-                               reply_markup=reply_markup, parse_mode="MARKDOWNV2")
-    else:
-        context.bot.send_message(
-            chatid, message, reply_markup=reply_markup, parse_mode="MARKDOWNV2")
+    if coverurl:
+        try:
+            context.bot.send_photo(chatid, coverurl, message,
+                                   reply_markup=reply_markup, parse_mode="MARKDOWNV2")
+            return
+        # Error, most of the times is a Image 400 Bad Request, without reason.
+        except:
+            pass
+
+    context.bot.send_message(
+        chatid, message, reply_markup=reply_markup, parse_mode="MARKDOWNV2")
 
 
 # Utils
