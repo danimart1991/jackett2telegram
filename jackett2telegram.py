@@ -366,6 +366,20 @@ def cbq_to_blackhole(update: Update, context: CallbackContext):
     except:
         pass
 
+    keyboard = [
+        update.effective_message.reply_markup.inline_keyboard[0],
+        [
+            InlineKeyboardButton("🕑", callback_data='blackhole')
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    context.bot.edit_message_reply_markup(
+        chat_id=update.effective_message.chat_id,
+        message_id=update.effective_message.message_id,
+        reply_markup=reply_markup)
+
+    message = None
     torrent_url = update.effective_message.reply_markup.inline_keyboard[0][1].url
     if (torrent_url):
         torrent_file = parse.parse_qs(
@@ -374,9 +388,9 @@ def cbq_to_blackhole(update: Update, context: CallbackContext):
             torrent_file = clean_filename(torrent_file + ".torrent")
             torrent_data = requests.get(torrent_url)
             if torrent_data and torrent_data.content:
+                button_message = "Downloaded ✔️"
                 with open(os.path.join(blackhole_path, torrent_file), 'wb') as file:
                     file.write(torrent_data.content)
-                message = "Movie Downloaded to Blackhole\."
             else:
                 message = "Can\'t obtain \.Torrent file data\."
         else:
@@ -384,7 +398,23 @@ def cbq_to_blackhole(update: Update, context: CallbackContext):
     else:
         message = "Can\'t obtain \.Torrent url to download\."
 
-    update.effective_message.reply_text(message, parse_mode="MARKDOWNV2")
+    if message:
+        button_message = "Failed ❌"
+        update.effective_message.reply_text(
+            message, quote=True, parse_mode="MARKDOWNV2")
+
+    keyboard = [
+        update.effective_message.reply_markup.inline_keyboard[0],
+        [
+            InlineKeyboardButton(button_message, callback_data='blackhole')
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    context.bot.edit_message_reply_markup(
+        chat_id=update.effective_message.chat_id,
+        message_id=update.effective_message.message_id,
+        reply_markup=reply_markup)
 
 
 def clean_filename(filename, whitelist=valid_filename_chars, replace=' '):
