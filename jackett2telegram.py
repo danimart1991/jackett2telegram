@@ -7,7 +7,7 @@ import unicodedata
 import xml.etree.ElementTree as ElementTree
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler
+from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler, Defaults
 from telegram.utils import helpers
 from urllib import parse
 
@@ -446,6 +446,10 @@ def main():
     dp.add_handler(CommandHandler("list", cmd_rss_list))
     dp.add_handler(CommandHandler("remove", cmd_rss_remove))
     dp.add_handler(CallbackQueryHandler(cbq_to_blackhole))
+
+    updater.bot.defaults = Defaults(
+        disable_web_page_preview = True,
+        parse_mode = "MARKDOWNV2")
 
     # try to create a database if missing
     try:
