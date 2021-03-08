@@ -19,18 +19,9 @@ db_path = os.path.join(config_path, "rss.db")
 os.makedirs(blackhole_path, exist_ok=True)
 os.makedirs(config_path, exist_ok=True)
 
-# Docker env
-if os.environ.get('TOKEN'):
-    Token = os.environ['TOKEN']
-    chatid = os.environ['CHATID']
-    delay = int(os.environ['DELAY'])
-else:
-    Token = "X"
-    chatid = "X"
-    delay = 60
-
-if Token == "X":
-    print("Token not set!")
+token = os.environ['TOKEN'] if os.environ.get('TOKEN') else "<YOUR_TOKEN_HERE>"
+chatid = os.environ['CHATID'] if os.environ.get('CHATID') else "<YOUR_CHATID_HERE>"
+delay = int(os.environ['DELAY']) if os.environ.get('DELAY') else 60
 
 ns = {'torznab': 'http://torznab.com/schemas/2015/feed'}
 rss_dict = {}
@@ -438,7 +429,7 @@ def clean_filename(filename, whitelist=valid_filename_chars, replace=' '):
 
 
 def main():
-    updater = Updater(token=Token, use_context=True)
+    updater = Updater(token=token, use_context=True)
     job_queue = updater.job_queue
     dp = updater.dispatcher
 
