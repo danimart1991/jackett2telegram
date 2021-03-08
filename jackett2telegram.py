@@ -89,13 +89,15 @@ def cmd_rss_list(update: Update, context: CallbackContext):
     if not (its_me(update)):
         return
     if bool(rss_dict) is False:
-        update.effective_message.reply_text("The database is empty")
+        update.effective_message.reply_text("The database is empty.")
     else:
         for title, url_list in rss_dict.items():
-            update.effective_message.reply_text(
+            message = helpers.escape_markdown(
                 "Title: " + title +
                 "\nJacket RSS url: " + url_list[0] +
-                "\nLast checked article published date: " + url_list[1])
+                "\nLast checked article published date: " + url_list[1],
+                2)
+            update.effective_message.reply_markdown_v2(message)
 
 
 def cmd_rss_add(update: Update, context: CallbackContext):
