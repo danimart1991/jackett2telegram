@@ -89,16 +89,18 @@ def rss_load():
 def cmd_rss_list(update: Update, context: CallbackContext):
     if not (its_me(update)):
         return
+    
+    indexers = ["*List of Registered Indexers\.*"]
     if bool(rss_dict) is False:
-        update.effective_message.reply_text("The database is empty.")
+        indexers.append("The database is empty\.")
     else:
         for title, url_list in rss_dict.items():
-            message = helpers.escape_markdown(
-                "Title: " + title +
-                "\nJacket RSS url: " + url_list[0] +
-                "\nLast checked article published date: " + url_list[1],
-                2)
-            update.effective_message.reply_markdown_v2(message)
+            indexers.append(
+                "Title: " + helpers.escape_markdown(title, 2) +
+                "\nJacket RSS: `" + helpers.escape_markdown(url_list[0], 2) + "`" +
+                "\nLast article from: " + helpers.escape_markdown(url_list[1], 2))
+        
+    update.effective_message.reply_markdown_v2("\n\n".join(indexers))
 
 
 def cmd_rss_add(update: Update, context: CallbackContext):
@@ -108,8 +110,8 @@ def cmd_rss_add(update: Update, context: CallbackContext):
     try:
         context.args[1]
     except IndexError:
-        update.effective_message.reply_text(
-            "ERROR: The format needs to be: /add title http://www.JACKETTRSSURL.com")
+        update.effective_message.reply_markdown_v2(
+            "*ERROR* \- The format needs to be:\n`/add title http://www.JACKETTRSSURL.com`")
         raise
     # try if the url is a valid Jackett RSS feed
     try:
@@ -117,8 +119,12 @@ def cmd_rss_add(update: Update, context: CallbackContext):
         root = ElementTree.fromstring(response.content)
         items = root.find('channel').findall('item')
     except ElementTree.ParseError:
-        update.effective_message.reply_text(
-            "ERROR: The link does not seem to be a Jackett RSS feed or is not supported")
+        update.effective_message.reply_markdown_v2(
+            "*ERROR* \- The link does not seem to be a Jackett RSS feed or is not supported\.")
+        raise
+    except requests.exceptions.MissingSchema:
+        update.effective_message.reply_markdown_v2(
+            "*ERROR* \- The link is malformed\.")
         raise
 
     items.sort(reverse=True, key=lambda item: pubDate_to_datetime(
@@ -126,8 +132,9 @@ def cmd_rss_add(update: Update, context: CallbackContext):
     sqlite_write(context.args[0], context.args[1],
                  items[0].find('pubDate').text, str([]))
     rss_load()
-    update.effective_message.reply_text(
-        "Added: %s\n%s" % (context.args[0], context.args[1]))
+    message = ("*Indexer added to the list:* " + context.args[0] +
+               "\n`" + helpers.escape_markdown(context.args[1], 2) + "`")
+    update.effective_message.reply_markdown_v2(message)
 
 
 def cmd_rss_remove(update: Update, context: CallbackContext):
@@ -140,37 +147,37 @@ def cmd_rss_remove(update: Update, context: CallbackContext):
         c.execute("SELECT count(*) FROM rss WHERE name = ?", q)
         res = c.fetchall()[0][0]
         if not (int(res) == 1):
-            update.effective_message.reply_text(
-                "ERROR: Jackett RSS not found.")
+            update.effective_message.reply_markdown_v2(
+            "*ERROR* \- Jackett RSS with title _" + context.args[0] + "_ not found\.")
             return
         c.execute("DELETE FROM rss WHERE name = ?", q)
         conn.commit()
         conn.close()
     except sqlite3.Error as e:
-        update.effective_message.reply_text(
-            "ERROR: Can't remove the Jackett RSS because of an uknown issue.")
+        update.effective_message.reply_markdown_v2(
+            "*ERROR* \- Can't remove the Jackett RSS because of an uknown issue\.")
         print('Error %s:' % e.args[0])
         raise
     rss_load()
-    update.effective_message.reply_text("Removed: " + context.args[0])
+    message = ("*Indexer removed from the list:* " + context.args[0])
+    update.effective_message.reply_markdown_v2(message)
 
 
 def cmd_help(update: Update, context: CallbackContext):
     if not (its_me(update)):
         return
     update.effective_message.reply_markdown_v2(
-        "*Jackett RSS to Telegram Bot*" +
+        "*Jackett2Telegram \(Jackett RSS to Telegram Bot\)*" +
         "\n\nAfter successfully adding a Jackett RSS link, the bot starts fetching the feed every "
         + str(delay) + " seconds\. \(This can be set\)" +
-        "\n\nTitles are used to easily manage RSS feeds and need to contain only one word\." +
+        "\n\nTitles are used to easily manage RSS feeds and should contain only one word and are case sensitive\." +
         "\n\nCommands:" +
         "\n\- `/help` Posts this help message\. 😑" +
-        "\n\- `/add title http://www\.JACKETTRSSURL\.com` Adds new Jackett RSS \(overwrited if title previously exist\)\." +
+        "\n\- `/add Title http://www\.JACKETTRSSURL\.com` Adds new Jackett RSS \(overwrited if title previously exist\)\." +
         "\n\- `/remove Title` Removes the RSS link\." +
-        "\n\- `/list` Lists all the titles and the Jackett RSS links from the DB\." +
+        "\n\- `/list` Lists all the titles and the asociated Jackett RSS links from the DB\." +
         "\n\- `/test http://www\.JACKETTRSSURL\.com` Inbuilt command that fetches a post \(usually latest\) from a Jackett RSS\." +
-        "\n\nThe current chatId is: " + str(update.message.chat.id) + "\." +
-        "\n\nIf you like the project, star it on [DockerHub](https://hub\.docker\.com/r/danimart1991/jackett2telegram)\.")
+        "\n\nIf you like the project, star it on [GitHub](https://github\.com/danimart1991/jackett2telegram)\.")
 
 
 def rss_monitor(context: CallbackContext):
@@ -209,8 +216,8 @@ def cmd_test(update: Update, context: CallbackContext):
     try:
         context.args[0]
     except IndexError:
-        update.effective_message.reply_text(
-            "ERROR: The format needs to be: /test http://www\.JACKETTRSSURL\.com")
+        update.effective_message.reply_markdown_v2(
+            "*ERROR* \- The format needs to be:\n`/test http://www.JACKETTRSSURL.com`")
         raise
     # try if the url is a valid Jackett RSS feed
     try:
@@ -218,8 +225,12 @@ def cmd_test(update: Update, context: CallbackContext):
         root = ElementTree.fromstring(response.content)
         items = root.find('channel').findall('item')
     except ElementTree.ParseError:
-        update.effective_message.reply_text(
-            "ERROR: The link does not seem to be a Jackett RSS feed or is not supported")
+        update.effective_message.reply_markdown_v2(
+            "*ERROR* \- The link does not seem to be a Jackett RSS feed or is not supported\.")
+        raise
+    except requests.exceptions.MissingSchema:
+        update.effective_message.reply_markdown_v2(
+            "*ERROR* \- The link is malformed\.")
         raise
 
     items.sort(reverse=True, key=lambda item: pubDate_to_datetime(
@@ -395,11 +406,11 @@ def cbq_to_blackhole(update: Update, context: CallbackContext):
                 with open(os.path.join(blackhole_path, torrent_file), 'wb') as file:
                     file.write(torrent_data.content)
             else:
-                message = "Can\'t obtain \.Torrent file data\."
+                message = "*ERROR* \- Can\'t obtain \.Torrent file data\."
         else:
-            message = "Can\'t obtain \.Torrent file name\."
+            message = "*ERROR* \- Can\'t obtain \.Torrent file name\."
     else:
-        message = "Can\'t obtain \.Torrent url to download\."
+        message = "*ERROR* \- Can\'t obtain \.Torrent url to download\."
 
     if message:
         button_message = "Failed ❌"
