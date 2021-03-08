@@ -19,8 +19,6 @@ db_path = os.path.join(config_path, "rss.db")
 os.makedirs(blackhole_path, exist_ok=True)
 os.makedirs(config_path, exist_ok=True)
 
-token = os.environ['TOKEN'] if os.environ.get('TOKEN') else "<YOUR_TOKEN_HERE>"
-chatid = os.environ['CHATID'] if os.environ.get('CHATID') else "<YOUR_CHATID_HERE>"
 levels = {
     'critical': logging.CRITICAL,
     'error': logging.ERROR,
@@ -30,8 +28,10 @@ levels = {
     'debug': logging.DEBUG
 }
 
+token = os.environ['TOKEN'] if os.environ.get('TOKEN') else "<YOUR_TOKEN_HERE>"
+chatid = os.environ['CHATID'] if os.environ.get('CHATID') else "<YOUR_CHATID_HERE>"
 delay = int(os.environ['DELAY']) if os.environ.get('DELAY') else 60
-log_level = levels.get(os.environ.get('LOG_LEVEL')) or logging.INFO
+log_level = levels.get(os.environ['LOG_LEVEL'].lower()) if os.environ.get('LOG_LEVEL') else logging.INFO
 
 ns = {'torznab': 'http://torznab.com/schemas/2015/feed'}
 rss_dict = {}

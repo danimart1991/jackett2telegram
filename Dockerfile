@@ -13,6 +13,7 @@ RUN pip install --trusted-host pypi.python.org -r /app/requirements.txt
 ENV TOKEN X
 ENV CHATID X
 ENV DELAY 60
+ENV LOG_LEVEL INFO
 
 # Run app.py when the container launches
 CMD ["python", "jackett2telegram.py"]
