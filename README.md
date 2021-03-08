@@ -39,6 +39,8 @@ $ docker create \
   danimart1991/jackett2telegram
 ```
 
+You could include `-e LOG_LEVEL={log_level}` where `{log_level}` must be *critical*, *error*, *warning*, *info* (default) or *debug*.
+
 ## Manual Installation
 
 Python 3.X
@@ -50,7 +52,7 @@ Python 3.X
     pip install -r requirements.txt
     ```
 
-3. Replace your ChatID and Token on the top of the script.
+3. Replace your `ChatID` and `Token` on the top of the script.
 4. Edit the delay (seconds).
 5. Run the script with:
 

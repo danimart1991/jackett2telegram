@@ -21,7 +21,17 @@ os.makedirs(config_path, exist_ok=True)
 
 token = os.environ['TOKEN'] if os.environ.get('TOKEN') else "<YOUR_TOKEN_HERE>"
 chatid = os.environ['CHATID'] if os.environ.get('CHATID') else "<YOUR_CHATID_HERE>"
+levels = {
+    'critical': logging.CRITICAL,
+    'error': logging.ERROR,
+    'warn': logging.WARNING,
+    'warning': logging.WARNING,
+    'info': logging.INFO,
+    'debug': logging.DEBUG
+}
+
 delay = int(os.environ['DELAY']) if os.environ.get('DELAY') else 60
+log_level = levels.get(os.environ.get('LOG_LEVEL')) or logging.INFO
 
 ns = {'torznab': 'http://torznab.com/schemas/2015/feed'}
 rss_dict = {}
@@ -30,7 +40,7 @@ valid_filename_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
 char_limit = 255
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
+                    level=log_level)
 
 
 # SQLITE
