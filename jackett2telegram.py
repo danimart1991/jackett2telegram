@@ -461,6 +461,13 @@ def main():
         pass
     rss_load()
 
+    welcome_message = ("*Jackett2Telegram has started\.*" +
+        "\nRSS Indexers: " + str(len(rss_dict)) +
+        "\nDelay: " + str(delay) + " seconds" +
+        "\nLog Level: " + logging.getLevelName(log_level))
+    updater.bot.send_message(
+        chatid, welcome_message, parse_mode="MARKDOWNV2")
+
     job_queue.run_repeating(rss_monitor, delay)
 
     updater.start_polling()
