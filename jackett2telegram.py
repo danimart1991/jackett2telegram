@@ -29,9 +29,11 @@ levels = {
 }
 
 token = os.environ['TOKEN'] if os.environ.get('TOKEN') else "<YOUR_TOKEN_HERE>"
-chatid = os.environ['CHATID'] if os.environ.get('CHATID') else "<YOUR_CHATID_HERE>"
+chatid = os.environ['CHATID'] if os.environ.get(
+    'CHATID') else "<YOUR_CHATID_HERE>"
 delay = int(os.environ['DELAY']) if os.environ.get('DELAY') else 60
-log_level = levels.get(os.environ['LOG_LEVEL'].lower()) if os.environ.get('LOG_LEVEL') else logging.INFO
+log_level = levels.get(os.environ['LOG_LEVEL'].lower()) if os.environ.get(
+    'LOG_LEVEL') else logging.INFO
 
 ns = {'torznab': 'http://torznab.com/schemas/2015/feed'}
 rss_dict = {}
@@ -47,9 +49,10 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 
 def init_sqlite():
+    logging.debug("Trying to create the Database")
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS rss (name text PRIMARY KEY, link text, last_pubdate text, last_items text)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS rss (name text PRIMARY KEY, link text, last_pubdate text, last_items text, is_down integer)''')
 
 
 def sqlite_connect():
@@ -66,12 +69,12 @@ def sqlite_load_all():
     return rows
 
 
-def sqlite_write(name: str, link: str, last_pubdate: str, last_items: str):
+def sqlite_write(name: str, link: str, last_pubdate: str, last_items: str, is_down: int):
     sqlite_connect()
     c = conn.cursor()
-    values = [(name), (link), (last_pubdate), (last_items)]
+    values = [(name), (link), (last_pubdate), (last_items), (is_down)]
     c.execute(
-        '''REPLACE INTO rss (name,link,last_pubdate,last_items) VALUES(?,?,?,?)''', values)
+        '''REPLACE INTO rss (name,link,last_pubdate,last_items,is_down) VALUES(?,?,?,?,?)''', values)
     conn.commit()
     conn.close()
 
@@ -83,23 +86,24 @@ def rss_load():
     if bool(rss_dict):
         rss_dict.clear()
     for row in sqlite_load_all():
-        rss_dict[row[0]] = (row[1], row[2], row[3])
+        rss_dict[row[0]] = (row[1], row[2], row[3], row[4])
 
 
 def cmd_rss_list(update: Update, context: CallbackContext):
     if not (its_me(update)):
         return
-    
+
     indexers = ["*List of Registered Indexers\.*"]
     if bool(rss_dict) is False:
         indexers.append("The database is empty\.")
     else:
-        for title, url_list in rss_dict.items():
+        for rss_name, rss_props in rss_dict.items():
             indexers.append(
-                "Title: " + helpers.escape_markdown(title, 2) +
-                "\nJacket RSS: `" + helpers.escape_markdown(url_list[0], 2) + "`" +
-                "\nLast article from: " + helpers.escape_markdown(url_list[1], 2))
-        
+                "Title: " + helpers.escape_markdown(rss_name, 2) +
+                "\nJacket RSS: `" + helpers.escape_markdown(rss_props[0], 2) + "`" +
+                "\nLast article from: " + helpers.escape_markdown(rss_props[1], 2) +
+                "\nStatus: " + ("✔️" if rss_props[3] == 0 else "⚠"))
+
     update.effective_message.reply_markdown_v2("\n\n".join(indexers))
 
 
@@ -110,8 +114,8 @@ def cmd_rss_add(update: Update, context: CallbackContext):
     try:
         context.args[1]
     except IndexError:
-        update.effective_message.reply_markdown_v2(
-            "*ERROR* \- The format needs to be:\n`/add title http://www.JACKETTRSSURL.com`")
+        telegram_send_reply_error(
+            update, "To add a new _Jackett RSS_ the command needs to be:\n`/add TITLE JACKETT_RSS_FEED_URL`")
         raise
     # try if the url is a valid Jackett RSS feed
     try:
@@ -119,20 +123,22 @@ def cmd_rss_add(update: Update, context: CallbackContext):
         root = ElementTree.fromstring(response.content)
         items = root.find('channel').findall('item')
     except ElementTree.ParseError:
-        update.effective_message.reply_markdown_v2(
-            "*ERROR* \- The link does not seem to be a Jackett RSS feed or is not supported\.")
+        telegram_send_reply_error(
+            update, "The link does not seem to be a _Jackett RSS Feed_ or is not supported\.")
         raise
     except requests.exceptions.MissingSchema:
-        update.effective_message.reply_markdown_v2(
-            "*ERROR* \- The link is malformed\.")
+        telegram_send_reply_error(
+            update, "The _Jackett RSS Feed Url_ is malformed\.")
         raise
 
     items.sort(reverse=True, key=lambda item: pubDate_to_datetime(
         item.find('pubDate').text))
     sqlite_write(context.args[0], context.args[1],
-                 items[0].find('pubDate').text, str([]))
+                 items[0].find('pubDate').text, str([]), 0)
     rss_load()
-    message = ("*Indexer added to the list:* " + context.args[0] +
+    logging.info("List: Indexer " +
+                 context.args[0] + " | " + context.args[1] + " added.")
+    message = ("*Indexer added to list:* " + helpers.escape_markdown(context.args[0], 2) +
                "\n`" + helpers.escape_markdown(context.args[1], 2) + "`")
     update.effective_message.reply_markdown_v2(message)
 
@@ -140,26 +146,35 @@ def cmd_rss_add(update: Update, context: CallbackContext):
 def cmd_rss_remove(update: Update, context: CallbackContext):
     if not (its_me(update)):
         return
+    # try if there are 1 arguments passed
+    try:
+        context.args[0]
+    except IndexError:
+        telegram_send_reply_error(
+            update, "To remove a _Jackett RSS_ the command needs to be:\n`/remove TITLE`")
+        raise
     sqlite_connect()
     c = conn.cursor()
     q = (context.args[0],)
+    escaped_indexer = helpers.escape_markdown(context.args[0], 2)
     try:
         c.execute("SELECT count(*) FROM rss WHERE name = ?", q)
         res = c.fetchall()[0][0]
         if not (int(res) == 1):
-            update.effective_message.reply_markdown_v2(
-            "*ERROR* \- Jackett RSS with title _" + context.args[0] + "_ not found\.")
-            return
+            telegram_send_reply_error(
+                update, "Can't remove _Jackett RSS_ with title _" + escaped_indexer + "_\. Not found\.")
+            raise KeyError("Indexer with name " +
+                           context.args[0] + " not found.")
         c.execute("DELETE FROM rss WHERE name = ?", q)
         conn.commit()
         conn.close()
     except sqlite3.Error as e:
-        update.effective_message.reply_markdown_v2(
-            "*ERROR* \- Can't remove the Jackett RSS because of an uknown issue\.")
-        print('Error %s:' % e.args[0])
+        telegram_send_reply_error(
+            update, "Can't remove the _Jackett RSS_ because of an unknown issue\.")
         raise
     rss_load()
-    message = ("*Indexer removed from the list:* " + context.args[0])
+    logging.info("List: Indexer " + context.args[0] + " removed.")
+    message = ("*Indexer removed from list:* " + escaped_indexer)
     update.effective_message.reply_markdown_v2(message)
 
 
@@ -172,41 +187,54 @@ def cmd_help(update: Update, context: CallbackContext):
         + str(delay) + " seconds\. \(This can be set\)" +
         "\n\nTitles are used to easily manage RSS feeds and should contain only one word and are case sensitive\." +
         "\n\nCommands:" +
-        "\n\- `/help` Posts this help message\. 😑" +
-        "\n\- `/add Title http://www\.JACKETTRSSURL\.com` Adds new Jackett RSS \(overwrited if title previously exist\)\." +
-        "\n\- `/remove Title` Removes the RSS link\." +
-        "\n\- `/list` Lists all the titles and the asociated Jackett RSS links from the DB\." +
-        "\n\- `/test http://www\.JACKETTRSSURL\.com` Inbuilt command that fetches a post \(usually latest\) from a Jackett RSS\." +
+        "\n\- /help \- Posts this help message\. 😑" +
+        "\n\- /add TITLE JACKETT\_RSS\_FEED\_URL \- Adds new Jackett RSS Feed \(overwrited if title previously exist\)\." +
+        "\n\- /remove TITLE \- Removes the RSS link\." +
+        "\n\- /list \- Lists all the titles and the asociated Jackett RSS links from the DB\." +
+        "\n\- /test JACKETT\_RSS\_FEED\_URL \- Inbuilt command that fetches a post \(usually latest\) from a Jackett RSS\." +
+        "\n\nIn order to use *Blackhole*, your _Torrent_ client must support it and be configured to point to *Jackett2Telegram* _Blackhole_ folder\."
         "\n\nIf you like the project, star it on [GitHub](https://github\.com/danimart1991/jackett2telegram)\.")
 
 
 def rss_monitor(context: CallbackContext):
-    for name, url_list in rss_dict.items():
-        response = requests.get(url_list[0])
-        root = ElementTree.fromstring(response.content)
-        items = root.find('channel').findall('item')
-        last_pubdate_datetime = pubDate_to_datetime(url_list[1])
-        filteredItems = filter(
-            lambda item: pubDate_to_datetime(item.find('pubDate').text) >= last_pubdate_datetime, items)
-        sortedFilteredItems = sorted(
-            filteredItems, key=lambda item: pubDate_to_datetime(item.find('pubDate').text))
+    for rss_name, rss_props in rss_dict.items():
+        try:
+            response = requests.get(rss_props[0])
+            root = ElementTree.fromstring(response.content)
+            items = root.find('channel').findall('item')
+            last_pubdate_datetime = pubDate_to_datetime(rss_props[1])
+            filteredItems = filter(
+                lambda item: pubDate_to_datetime(item.find('pubDate').text) >= last_pubdate_datetime, items)
+            sortedFilteredItems = sorted(
+                filteredItems, key=lambda item: pubDate_to_datetime(item.find('pubDate').text))
 
-        if sortedFilteredItems:
-            last_items = eval(url_list[2])
-            for item in sortedFilteredItems:
-                item_guid = item.find('guid').text
-                if item_guid not in last_items:
-                    last_items.append(item_guid)
-                    jackettitem_to_telegram(context, item, name)
+            if sortedFilteredItems:
+                last_items = eval(rss_props[2])
+                for item in sortedFilteredItems:
+                    item_guid = item.find('guid').text
+                    if item_guid not in last_items:
+                        last_items.append(item_guid)
+                        jackettitem_to_telegram(context, item, rss_name)
 
-            itemsCount = len(items)
-            while (len(last_items) > itemsCount):
-                last_items.pop(0)
+                itemsCount = len(items)
+                while (len(last_items) > itemsCount):
+                    last_items.pop(0)
 
-            new_pubdate = sortedFilteredItems[-1].find('pubDate').text
-            sqlite_write((name), (url_list[0]),
-                         (new_pubdate), (str(last_items)))
-            rss_load()
+                new_pubdate = sortedFilteredItems[-1].find('pubDate').text
+                sqlite_write(rss_name, rss_props[0],
+                             new_pubdate, str(last_items), 0)
+        except:
+            if (rss_props[3] != 1):
+                msg = "Indexer not available due to some issue: " + \
+                    helpers.escape_markdown(rss_name, 2)
+                context.bot.send_message(
+                    chatid, "*ERROR:* " + msg, parse_mode="MARKDOWNV2")
+                logging.exception(msg)
+                sqlite_write(rss_name, rss_props[0],
+                             rss_props[1], rss_props[2], 1)
+            pass
+
+    rss_load()
 
 
 def cmd_test(update: Update, context: CallbackContext):
@@ -216,8 +244,8 @@ def cmd_test(update: Update, context: CallbackContext):
     try:
         context.args[0]
     except IndexError:
-        update.effective_message.reply_markdown_v2(
-            "*ERROR* \- The format needs to be:\n`/test http://www.JACKETTRSSURL.com`")
+        telegram_send_reply_error(
+            update, "The format needs to be:\n`/test JACKETT\_RSS\_FEED\_URL`")
         raise
     # try if the url is a valid Jackett RSS feed
     try:
@@ -225,12 +253,12 @@ def cmd_test(update: Update, context: CallbackContext):
         root = ElementTree.fromstring(response.content)
         items = root.find('channel').findall('item')
     except ElementTree.ParseError:
-        update.effective_message.reply_markdown_v2(
-            "*ERROR* \- The link does not seem to be a Jackett RSS feed or is not supported\.")
+        telegram_send_reply_error(
+            update, "The link does not seem to be a _Jackett RSS Feed_ or is not supported\.")
         raise
     except requests.exceptions.MissingSchema:
-        update.effective_message.reply_markdown_v2(
-            "*ERROR* \- The link is malformed\.")
+        telegram_send_reply_error(
+            update, "The _Jackett RSS Feed Url_ is malformed\.")
         raise
 
     items.sort(reverse=True, key=lambda item: pubDate_to_datetime(
@@ -363,11 +391,18 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
     context.bot.send_message(
         chatid, message, reply_markup=reply_markup, parse_mode="MARKDOWNV2")
 
+# Telegram
 
-# Utils
+
+def telegram_send_reply_error(update: Update, msg: str):
+    update.effective_message.reply_markdown_v2("*ERROR:* " + msg, quote=True)
+
 
 def its_me(update: Update):
     return str(update.effective_chat.id) == chatid
+
+
+# Utils
 
 
 def cbq_to_blackhole(update: Update, context: CallbackContext):
@@ -393,7 +428,7 @@ def cbq_to_blackhole(update: Update, context: CallbackContext):
         message_id=update.effective_message.message_id,
         reply_markup=reply_markup)
 
-    message = None
+    msg = None
     torrent_url = update.effective_message.reply_markup.inline_keyboard[0][1].url
     if (torrent_url):
         torrent_file = parse.parse_qs(
@@ -402,25 +437,25 @@ def cbq_to_blackhole(update: Update, context: CallbackContext):
             torrent_file = clean_filename(torrent_file + ".torrent")
             torrent_data = requests.get(torrent_url)
             if torrent_data and torrent_data.content:
-                button_message = "Downloaded ✔️"
+                button_msg = "Downloaded ✔️"
                 with open(os.path.join(blackhole_path, torrent_file), 'wb') as file:
                     file.write(torrent_data.content)
             else:
-                message = "*ERROR* \- Can\'t obtain \.Torrent file data\."
+                msg = "Can\'t obtain `.Torrent` file data\."
         else:
-            message = "*ERROR* \- Can\'t obtain \.Torrent file name\."
+            msg = "Can\'t obtain `.Torrent` file name\."
     else:
-        message = "*ERROR* \- Can\'t obtain \.Torrent url to download\."
+        msg = "Can\'t obtain `.Torrent` Url to download\."
 
-    if message:
-        button_message = "Failed ❌"
-        update.effective_message.reply_text(
-            message, quote=True, parse_mode="MARKDOWNV2")
+    if msg:
+        button_msg = "Failed ❌"
+        telegram_send_reply_error(update, msg)
+        logging.error("Blackhole - " + msg)
 
     keyboard = [
         update.effective_message.reply_markup.inline_keyboard[0],
         [
-            InlineKeyboardButton(button_message, callback_data='blackhole')
+            InlineKeyboardButton(button_msg, callback_data='blackhole')
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -443,7 +478,8 @@ def clean_filename(filename, whitelist=valid_filename_chars, replace=' '):
     # keep only whitelisted chars
     cleaned_filename = ''.join(c for c in cleaned_filename if c in whitelist)
     if len(cleaned_filename) > char_limit:
-        print("Warning, filename truncated because it was over {}. Filenames may no longer be unique".format(char_limit))
+        logging.warning(
+            "Filename truncated because it was over {}. Filenames may no longer be unique.".format(char_limit))
     return cleaned_filename[:char_limit]
 
 # Main
@@ -462,20 +498,22 @@ def main():
     dp.add_handler(CallbackQueryHandler(cbq_to_blackhole))
 
     updater.bot.defaults = Defaults(
-        disable_web_page_preview = True,
-        parse_mode = "MARKDOWNV2")
+        disable_web_page_preview=True,
+        quote=True,
+        parse_mode="MARKDOWNV2")
 
-    # try to create a database if missing
+    # Try to create a database if missing
     try:
         init_sqlite()
     except sqlite3.OperationalError:
+        logging.exception("Fail trying to create the Database.")
         pass
     rss_load()
 
     welcome_message = ("*Jackett2Telegram has started\.*" +
-        "\nRSS Indexers: " + str(len(rss_dict)) +
-        "\nDelay: " + str(delay) + " seconds" +
-        "\nLog Level: " + logging.getLevelName(log_level))
+                       "\nRSS Indexers: " + str(len(rss_dict)) +
+                       "\nDelay: " + str(delay) + " seconds" +
+                       "\nLog Level: " + logging.getLevelName(log_level))
     updater.bot.send_message(
         chatid, welcome_message, parse_mode="MARKDOWNV2")
 

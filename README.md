@@ -39,7 +39,7 @@ $ docker create \
   danimart1991/jackett2telegram
 ```
 
-You could include `-e LOG_LEVEL={log_level}` where `{log_level}` must be *critical*, *error*, *warning*, *info* (default) or *debug*.
+You could include `-e LOG_LEVEL={log_level}` where `{log_level}` must be _critical_, _error_, _warning_, _info_ (default) or _debug_.
 
 ## Manual Installation
 
@@ -48,40 +48,54 @@ Python 3.X
 1. Clone the script
 2. Install depedencies with:
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 3. Replace your `ChatID` and `Token` on the top of the script.
 4. Edit the delay (seconds).
 5. Run the script with:
 
-    ```bash
-    python jackett2telegram.py
-    ```
+   ```bash
+   python jackett2telegram.py
+   ```
 
 ## Usage
 
-Send `/help` to the bot to get this message:
+Send `/help` command to the bot to get this message:
 
-> Jackett RSS to Telegram bot
+> **Jackett2Telegram (Jackett RSS to Telegram Bot)**
 >
 > After successfully adding a Jackett RSS link, the bot starts fetching the feed every 60 seconds. (This can be set)
 >
-> Titles are used to easily manage RSS feeds and need to contain only one word.
+> Titles are used to easily manage RSS feeds and should contain only one word and are case sensitive.
 >
 > Commands:
 >
 > - /help Posts this help message. 😑
-> - /add title http://www.JACKETTRSSURL.com Adds new Jackett RSS (overwrited if title previously exist).
-> - /remove Title Removes the RSS link.
-> - /list Lists all the titles and the Jackett RSS links from the DB.
-> - /test http://www.JACKETTRSSURL.com Inbuilt command that fetches a post (usually latest) from a Jackett RSS.
+> - /add TITLE JACKETT_RSS_FEED_URL - Adds new Jackett RSS Feed (overwrited if title previously exist).
+> - /remove TITLE - Removes the RSS link.
+> - /list Lists all the titles and the asociated Jackett RSS links from the DB.
+> - /test JACKETT_RSS_FEED_URL - Inbuilt command that fetches a post (usually latest) from a Jackett RSS.
 >
-> The current chatId is: 123XXXXXXX.
+> In order to use **Blackhole**, your _Torrent_ client must support it and be configured to point to **Jackett2Telegram** _Blackhole_ folder.
 >
-> If you like the project, star it on DockerHub(https://hub.docker.com/r/danimart1991/jackett2telegram).
+> If you like the project, star it on [GitHub](https://github.com/danimart1991/jackett2telegram).
+
+### How to add a new Indexer
 
 You could get the **Jackett RSS Feed Url** using the action button in Indexers list:
 
 ![Jackett RSS Feed Button](https://github.com/danimart1991/jackett2telegram/blob/main/docs/images/rssfeed.png?raw=true)
+
+Then paste the Url in the chat like `/add AnyTitle Pasted_RSSFeedURL` and send the message. The bot will reply with the result.
+
+### How to use Blackhole
+
+**Blackhole** folder is a monitored folder that your _Torrent_ client checks to look for `.torrent` files and then download them automatically.
+
+First, you must read the documentation of the _Torrent_ client to make sure is supported and simply configure it to point to the blackhole folder created by **Jackett2Telegram**.
+
+When a new release is showed in Telegram, a Blackhole button could be pressed and download the `.torrent` file locally, then _Torrent_ client use it.
+
+> If you use the _Docker_ installation, make a bind between folders.
