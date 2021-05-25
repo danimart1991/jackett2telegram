@@ -367,15 +367,23 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
                downloadvolumefactor +
                uploadvolumefactor)
 
-    keyboard = [
-        [
-            InlineKeyboardButton("Link", url=item.find('guid').text),
-            InlineKeyboardButton(".Torrent", url=item.find('link').text)
-        ],
-        [
-            InlineKeyboardButton("To Blackhole", callback_data='blackhole')
+    link = item.find('link').text
+    if (link.startswith("magnet:")):
+        keyboard = [
+            [
+                InlineKeyboardButton("Link", url=item.find('guid').text)
+            ]
         ]
-    ]
+    else:
+        keyboard = [
+            [
+                InlineKeyboardButton("Link", url=item.find('guid').text),
+                InlineKeyboardButton(".Torrent", url=link)
+            ],
+            [
+                InlineKeyboardButton("To Blackhole", callback_data='blackhole')
+            ]
+        ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
