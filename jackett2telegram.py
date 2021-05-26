@@ -318,9 +318,31 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
     grabs = item.find('grabs').text if item.find('grabs') else "\-"
     uploadvolumefactor = ""
     downloadvolumefactor = ""
+    magnet = ""
 
     size = helpers.escape_markdown(
         str(round(float(item.find('size').text)/1073741824, 2)) + "GB", 2)
+
+    link = item.find('link').text
+    if (link.startswith("magnet:")):
+        magnet = helpers.escape_markdown(link, 2)
+        keyboard = [
+            [
+                InlineKeyboardButton("Link", url=item.find('guid').text)
+            ]
+        ]
+    else:
+        keyboard = [
+            [
+                InlineKeyboardButton("Link", url=item.find('guid').text),
+                InlineKeyboardButton(".Torrent", url=link)
+            ],
+            [
+                InlineKeyboardButton("To Blackhole", callback_data='blackhole')
+            ]
+        ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
     for torznabattr in item.findall('torznab:attr', ns):
         torznabattr_name = torznabattr.get('name')
@@ -365,27 +387,8 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
                "📤 " + seeders + " 📥 " + peers + " 💾 " + grabs + " 🗜 " + size +
                "\n\n" +
                downloadvolumefactor +
-               uploadvolumefactor)
-
-    link = item.find('link').text
-    if (link.startswith("magnet:")):
-        keyboard = [
-            [
-                InlineKeyboardButton("Link", url=item.find('guid').text)
-            ]
-        ]
-    else:
-        keyboard = [
-            [
-                InlineKeyboardButton("Link", url=item.find('guid').text),
-                InlineKeyboardButton(".Torrent", url=link)
-            ],
-            [
-                InlineKeyboardButton("To Blackhole", callback_data='blackhole')
-            ]
-        ]
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
+               uploadvolumefactor +
+               "\n`" + magnet + "`")
 
     if coverurl:
         try:
