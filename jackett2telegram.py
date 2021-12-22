@@ -328,13 +328,13 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
         magnet = helpers.escape_markdown(link, 2)
         keyboard = [
             [
-                InlineKeyboardButton("Link", url=item.find('guid').text)
+                InlineKeyboardButton("Link", url=item.find('comments').text)
             ]
         ]
     else:
         keyboard = [
             [
-                InlineKeyboardButton("Link", url=item.find('guid').text),
+                InlineKeyboardButton("Link", url=item.find('comments').text),
                 InlineKeyboardButton(".Torrent", url=link)
             ],
             [
