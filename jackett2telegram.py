@@ -323,28 +323,22 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
     size = helpers.escape_markdown(
         str(round(float(item.find('size').text)/1073741824, 2)) + "GiB", 2)
 
+    keyboard = [[]]
+    comments = item.find('comments').text
+    if (comments):
+        keyboard[0].append(InlineKeyboardButton("🔗", url=comments))
     guid = item.find('guid').text
     link = item.find('link').text
-    comments = item.find('comments').text
     if (guid.startswith("magnet:")):
-        magnet = helpers.escape_markdown(link, 2)
-        keyboard = [
-            [
-                InlineKeyboardButton("Link", url=comments),
-                InlineKeyboardButton("Magnet", url=link)
-            ]
-        ]
+        if (link.startswith("magnet:")):
+            magnet = helpers.escape_markdown(link, 2)
+        else:
+            magnet = helpers.escape_markdown(guid, 2)
+            keyboard[0].append(InlineKeyboardButton("🧲", url=link))
     else:
-        keyboard = [
-            [
-                InlineKeyboardButton("Link", url=comments),
-                InlineKeyboardButton(".Torrent", url=link)
-            ],
-            [
-                InlineKeyboardButton("To Blackhole", callback_data='blackhole')
-            ]
-        ]
-
+        keyboard[0].append(InlineKeyboardButton("💾", url=link))
+        keyboard[0].append(InlineKeyboardButton(
+            "🕳", callback_data='blackhole'))
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     for torznabattr in item.findall('torznab:attr', ns):
@@ -431,18 +425,14 @@ def cbq_to_blackhole(update: Update, context: CallbackContext):
     except:
         pass
 
-    keyboard = [
-        update.effective_message.reply_markup.inline_keyboard[0],
-        [
-            InlineKeyboardButton("🕑", callback_data='blackhole')
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    update.effective_message.reply_markup.inline_keyboard[0].pop()
+    update.effective_message.reply_markup.inline_keyboard[0].append(InlineKeyboardButton(
+        "⏳", callback_data=update.callback_query.data))
 
     context.bot.edit_message_reply_markup(
         chat_id=update.effective_message.chat_id,
         message_id=update.effective_message.message_id,
-        reply_markup=reply_markup)
+        reply_markup=update.effective_message.reply_markup)
 
     msg = None
     torrent_url = update.effective_message.reply_markup.inline_keyboard[0][1].url
@@ -453,7 +443,7 @@ def cbq_to_blackhole(update: Update, context: CallbackContext):
             torrent_file = clean_filename(torrent_file + ".torrent")
             torrent_data = requests.get(torrent_url)
             if torrent_data and torrent_data.content:
-                button_msg = "Downloaded ✔️"
+                button_msg = "✔️"
                 with open(os.path.join(blackhole_path, torrent_file), 'wb') as file:
                     file.write(torrent_data.content)
             else:
@@ -464,22 +454,18 @@ def cbq_to_blackhole(update: Update, context: CallbackContext):
         msg = "Can\'t obtain `.Torrent` Url to download\."
 
     if msg:
-        button_msg = "Failed ❌"
+        button_msg = "❌"
         telegram_send_reply_error(update, msg)
         logging.error("Blackhole - " + msg)
 
-    keyboard = [
-        update.effective_message.reply_markup.inline_keyboard[0],
-        [
-            InlineKeyboardButton(button_msg, callback_data='blackhole')
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    update.effective_message.reply_markup.inline_keyboard[0].pop()
+    update.effective_message.reply_markup.inline_keyboard[0].append(InlineKeyboardButton(
+        button_msg, callback_data=update.callback_query.data))
 
     context.bot.edit_message_reply_markup(
         chat_id=update.effective_message.chat_id,
         message_id=update.effective_message.message_id,
-        reply_markup=reply_markup)
+        reply_markup=update.effective_message.reply_markup)
 
 
 def clean_filename(filename, whitelist=valid_filename_chars, replace=' '):
