@@ -31,7 +31,7 @@ levels = {
 token = os.environ['TOKEN'] if os.environ.get('TOKEN') else "<YOUR_TOKEN_HERE>"
 chatid = os.environ['CHATID'] if os.environ.get(
     'CHATID') else "<YOUR_CHATID_HERE>"
-delay = int(os.environ['DELAY']) if os.environ.get('DELAY') else 60
+delay = int(os.environ['DELAY']) if os.environ.get('DELAY') else 600
 log_level = levels.get(os.environ['LOG_LEVEL'].lower()) if os.environ.get(
     'LOG_LEVEL') else logging.INFO
 

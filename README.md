@@ -30,7 +30,7 @@ You could use [this post](https://www.danielmartingonzalez.com/en/home-assistant
 ```bash
 $ docker create \
   --name=jackett2telegram \
-  -e DELAY=60 \
+  -e DELAY=600 \
   -e TOKEN={telegram_bot_token} \
   -e CHATID={telegram_bot_chatid} \
   -v {/path/to/host/config}:/app/config \
@@ -66,7 +66,7 @@ Send `/help` command to the bot to get this message:
 
 > **Jackett2Telegram (Jackett RSS to Telegram Bot)**
 >
-> After successfully adding a Jackett RSS link, the bot starts fetching the feed every 60 seconds. (This can be set)
+> After successfully adding a Jackett RSS link, the bot starts fetching the feed every 600 seconds. (This can be set)
 >
 > Titles are used to easily manage RSS feeds and should contain only one word and are case sensitive.
 >
