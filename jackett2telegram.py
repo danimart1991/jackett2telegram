@@ -361,8 +361,8 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
             basecoverurl = torznabattr.get('value')
             if (basecoverurl):
                 if (basecoverurl.find("images.weserv.nl") != -1):
-                    coverurl = '&'.join(basecoverurl.split('&')[
-                                        :-1]) + "&w=480&h=270&fit=contain&cbg=white"
+                    coverurl = basecoverurl.split(
+                        '&')[0] + "&w=480&h=270&fit=contain&cbg=white"
                 else:
                     coverurl = "https://images.weserv.nl/?url=" + \
                         basecoverurl.split(
