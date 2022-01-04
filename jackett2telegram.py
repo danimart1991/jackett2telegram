@@ -251,6 +251,7 @@ def cmd_test(update: Update, context: CallbackContext):
     try:
         response = requests.get(context.args[0])
         root = ElementTree.fromstring(response.content)
+        title = root.find('channel').find('title').text
         items = root.find('channel').findall('item')
     except ElementTree.ParseError:
         telegram_send_reply_error(
@@ -263,7 +264,7 @@ def cmd_test(update: Update, context: CallbackContext):
 
     items.sort(reverse=True, key=lambda item: pubDate_to_datetime(
         item.find('pubDate').text))
-    jackettitem_to_telegram(context, items[0])
+    jackettitem_to_telegram(context, items[0], title)
 
 
 def pubDate_to_datetime(pubDate: str):
@@ -305,13 +306,12 @@ def parse_typeIcon(value: int):
     return ""
 
 
-def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element, rssName: str = None):
+def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element, rssName: str):
     coverurl = None
     title = helpers.escape_markdown(item.find('title').text, 2)
     category = item.find('category').text
     icons = [parse_typeIcon(category)]
-    trackerName = helpers.escape_markdown(
-        rssName or item.find('jackettindexer').text, 2)
+    trackerName = helpers.escape_markdown(rssName, 2)
     externalLinks = []
     seeders = "\-"
     peers = "\-"
