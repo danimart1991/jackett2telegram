@@ -365,9 +365,11 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
             if (basecoverurl):
                 if (basecoverurl.find("images.weserv.nl") != -1):
                     coverurl = '&'.join(basecoverurl.split('&')[
-                                        :-1]) + "&w=180&h=270"
+                                        :-1]) + "&w=480&h=270&fit=contain&cbg=white"
                 else:
-                    coverurl = "https://images.weserv.nl/?url=" + basecoverurl + "&w=180&h=270"
+                    coverurl = "https://images.weserv.nl/?url=" + \
+                        basecoverurl.split(
+                            '&')[0] + "&w=480&h=270&fit=contain&cbg=white"
         elif (torznabattr_name == "imdbid"):
             externalLinks.append(
                 "[*IMDb*](https://www.imdb.com/title/" + torznabattr.get('value') + ")")
