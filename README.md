@@ -31,15 +31,15 @@ You could use [this post](https://www.danielmartingonzalez.com/en/home-assistant
 $ docker create \
   --name=jackett2telegram \
   -e DELAY=600 \
-  -e TOKEN={telegram_bot_token} \
-  -e CHATID={telegram_bot_chatid} \
-  -v {/path/to/host/config}:/app/config \
-  -v {/path/to/host/blackhole}:/app/blackhole \
+  -e TOKEN=<your_telegram_bot_token> \
+  -e CHATID=<your_telegram_bot_chatid> \
+  -v </path/to/host/config>:/app/config \
+  -v </path/to/host/blackhole>:/app/blackhole \
   --restart unless-stopped \
   danimart1991/jackett2telegram
 ```
 
-You could include `-e LOG_LEVEL={log_level}` where `{log_level}` must be _critical_, _error_, _warning_, _info_ (default) or _debug_.
+You could include `-e LOG_LEVEL=<log_level>` where `<log_level>` must be _critical_, _error_, _warning_, _info_ (default) or _debug_.
 
 ## Manual Installation
 

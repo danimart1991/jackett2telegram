@@ -321,7 +321,7 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
     magnet = ""
 
     size = helpers.escape_markdown(
-        str(round(float(item.find('size').text)/1073741824, 2)) + "GB", 2)
+        str(round(float(item.find('size').text)/1073741824, 2)) + "GiB", 2)
 
     link = item.find('link').text
     if (link.startswith("magnet:")):
