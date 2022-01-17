@@ -285,23 +285,31 @@ def parse_uploadvolumefactor(value: float):
     return ""
 
 
-def parse_typeIcon(value: int):
-    type = str(value)[:1]
-    if (type == "1"):
+def parse_category(category: str):
+    try:
+        value = int(category)//1000
+    except ValueError:
+        value = -1
+        logging.exception('Category: ' + category + ' is not an Integer')
+    return value
+
+
+def parse_categoryIcon(category: int):
+    if (category == 1):
         return "🎮"
-    elif (type == "2"):
+    elif (category == 2):
         return "🎬"
-    elif (type == "3"):
+    elif (category == 3):
         return "🎵"
-    elif (type == "4"):
+    elif (category == 4):
         return "💾"
-    elif (type == "5"):
+    elif (category == 5):
         return "📺"
-    elif (type == "6"):
+    elif (category == 6):
         return "🔶"
-    elif (type == "7"):
+    elif (category == 7):
         return "📕"
-    elif (type == "8"):
+    elif (category == 8):
         return "❓"
     return ""
 
@@ -309,8 +317,9 @@ def parse_typeIcon(value: int):
 def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element, rssName: str):
     coverurl = None
     title = helpers.escape_markdown(item.find('title').text, 2)
-    category = item.find('category').text
-    icons = [parse_typeIcon(category)]
+    category = parse_category(
+        item.find('category').text) if item.findall('category') else -1
+    icons = [parse_categoryIcon(category)]
     trackerName = helpers.escape_markdown(rssName, 2)
     externalLinks = []
     seeders = "\-"
@@ -378,9 +387,9 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
                 "[*IMDb*](https://www.imdb.com/title/" + torznabattr.get('value') + ")")
         elif (torznabattr_name == "tmdbid"):
             type = None
-            if str(category)[:1] == "2":
+            if category == 2:
                 type = "movie"
-            elif str(category)[:1] == "5":
+            elif category == 5:
                 type = "tv"
             if type:
                 externalLinks.append(
