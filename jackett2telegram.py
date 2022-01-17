@@ -315,7 +315,8 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
     externalLinks = []
     seeders = "\-"
     peers = "\-"
-    grabs = item.find('grabs').text if item.find('grabs') else "\-"
+    grabs = item.find('grabs').text if item.findall('grabs') else "\-"
+    files = item.find('files').text if item.findall('files') else "\-"
     uploadvolumefactor = ""
     downloadvolumefactor = ""
     magnet = ""
@@ -383,7 +384,7 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
     message = ("\|".join(icons) + " \- " + title + " by _" + trackerName + "_" +
                ("\n📌 " + "\|".join(externalLinks) if externalLinks else "") +
                "\n\n" +
-               "📤 " + seeders + " 📥 " + peers + " 💾 " + grabs + " 🗜 " + size +
+               "📤 " + seeders + " 📥 " + peers + " 💾 " + grabs + " 🗜 " + size + " 🗃 " + files +
                "\n\n" +
                downloadvolumefactor +
                uploadvolumefactor +
