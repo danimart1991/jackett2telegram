@@ -319,27 +319,32 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
     files = item.find('files').text if item.findall('files') else "\-"
     uploadvolumefactor = ""
     downloadvolumefactor = ""
-    magnet = ""
+    downloadUrl = ""
+    magnetUrl = ""
 
     size = helpers.escape_markdown(
         str(round(float(item.find('size').text)/1073741824, 2)) + "GiB", 2)
 
+    guid = item.find('guid').text if item.findall('guid') else None
+    link = item.find('link').text if item.findall('link') else None
+    if guid and guid.startswith("magnet:"):
+        magnetUrl = helpers.escape_markdown(guid, 2)
+    elif not magnetUrl and link and link.startswith("magnet:"):
+        magnetUrl = helpers.escape_markdown(link, 2)
+    if link and not link.startswith("magnet:"):
+        downloadUrl = link
+
     keyboard = [[]]
-    comments = item.find('comments').text
-    if (comments):
-        keyboard[0].append(InlineKeyboardButton("🔗", url=comments))
-    guid = item.find('guid').text
-    link = item.find('link').text
-    if (guid.startswith("magnet:")):
-        if (link.startswith("magnet:")):
-            magnet = helpers.escape_markdown(link, 2)
-        else:
-            magnet = helpers.escape_markdown(guid, 2)
-            keyboard[0].append(InlineKeyboardButton("🧲", url=link))
-    else:
-        keyboard[0].append(InlineKeyboardButton("💾", url=link))
+    if item.findall('comments'):
         keyboard[0].append(InlineKeyboardButton(
-            "🕳", callback_data='blackhole'))
+            "🔗", url=item.find('comments').text))
+    if downloadUrl:
+        if magnetUrl:
+            keyboard[0].append(InlineKeyboardButton("🧲", url=downloadUrl))
+        else:
+            keyboard[0].append(InlineKeyboardButton("💾", url=downloadUrl))
+            keyboard[0].append(InlineKeyboardButton(
+                "🕳", callback_data='blackhole'))
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     for torznabattr in item.findall('torznab:attr', ns):
@@ -380,6 +385,8 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
             if type:
                 externalLinks.append(
                     "[*TMDb*](https://www.themoviedb.org/" + type + "/" + torznabattr.get('value') + ")")
+        elif (torznabattr_name == "magneturl" and not magnetUrl):
+            magnetUrl = torznabattr.get('value')
 
     message = ("\|".join(icons) + " \- " + title + " by _" + trackerName + "_" +
                ("\n📌 " + "\|".join(externalLinks) if externalLinks else "") +
@@ -388,7 +395,7 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
                "\n\n" +
                downloadvolumefactor +
                uploadvolumefactor +
-               "\n`" + magnet + "`")
+               "\n\n`" + magnetUrl + "`")
 
     if coverurl:
         try:
