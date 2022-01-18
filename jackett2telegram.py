@@ -373,15 +373,7 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
         elif (torznabattr_name == "peers"):
             peers = torznabattr.get('value')
         elif (torznabattr_name == "coverurl"):
-            basecoverurl = torznabattr.get('value')
-            if (basecoverurl):
-                if (basecoverurl.find("images.weserv.nl") != -1):
-                    coverurl = basecoverurl.split(
-                        '&')[0] + "&w=480&h=270&fit=contain&cbg=white"
-                else:
-                    coverurl = "https://images.weserv.nl/?url=" + \
-                        basecoverurl.split(
-                            '&')[0] + "&w=480&h=270&fit=contain&cbg=white"
+            coverurl = torznabattr.get('value')
         elif (torznabattr_name == "imdbid"):
             externalLinks.append(
                 "[*IMDb*](https://www.imdb.com/title/" + torznabattr.get('value') + ")")
@@ -408,15 +400,19 @@ def jackettitem_to_telegram(context: CallbackContext, item: ElementTree.Element,
 
     if coverurl:
         try:
-            context.bot.send_photo(chatid, coverurl, message,
+            coverraw = requests.get(coverurl, stream=True).raw
+            context.bot.send_photo(chatid, photo=coverraw, caption=message,
                                    reply_markup=reply_markup, parse_mode="MARKDOWNV2")
             return
         # Error, most of the times is a Image 400 Bad Request, without reason.
         except:
+            logging.exception(
+                'Error sending release with cover. Trying to send without cover.')
             pass
 
     context.bot.send_message(
         chatid, message, reply_markup=reply_markup, parse_mode="MARKDOWNV2")
+
 
 # Telegram
 
