@@ -97,7 +97,7 @@ def cmd_rss_list(update: Update, context: CallbackContext):
     if bool(rss_dict) is False:
         indexers.append("The database is empty\.")
     else:
-        for rss_name, rss_props in rss_dict.items():
+        for rss_name, rss_props in sorted(rss_dict.items(), key=lambda item: item[0]):
             indexers.append(
                 "Title: " + helpers.escape_markdown(rss_name, 2) +
                 "\nJacket RSS: `" + helpers.escape_markdown(rss_props[0], 2) + "`" +
