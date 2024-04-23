@@ -454,13 +454,20 @@ def cbq_to_blackhole(update: Update, context: CallbackContext):
             parse.urlparse(torrent_url).query)['file'][0]
         if (torrent_file):
             torrent_file = clean_filename(torrent_file + ".torrent")
-            torrent_data = requests.get(torrent_url)
-            if torrent_data and torrent_data.content:
-                button_msg = "✔️"
-                with open(os.path.join(blackhole_path, torrent_file), 'wb') as file:
-                    file.write(torrent_data.content)
-            else:
-                msg = "Can\'t obtain `.Torrent` file data\."
+            try:
+                torrent_data = requests.get(torrent_url)
+                if torrent_data and torrent_data.content:
+                    button_msg = "✔️"
+                    with open(os.path.join(blackhole_path, torrent_file), 'wb') as file:
+                        file.write(torrent_data.content)
+                else:
+                    msg = "Can\'t obtain `.Torrent` file data\."
+            except Exception as exception:
+                if exception.args[0] and "magnet:?" in exception.args[0]:
+                    msg = "It seems that the torrent is a magnet file, it can't be added using blackhole, please use another option\."
+                else:
+                    print(exception)
+                msg = "Can\'t obtain `.Torrent` file\."
         else:
             msg = "Can\'t obtain `.Torrent` file name\."
     else:
