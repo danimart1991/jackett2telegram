@@ -1,12 +1,9 @@
 ![Jackett RSS to Telegram Bot logo](https://github.com/danimart1991/jackett2telegram/blob/main/docs/images/logo.png?raw=true)
 
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/danimart1991/jackett2telegram)](https://github.com/danimart1991/jackett2telegram/releases)
-[![GitHub last commit](https://img.shields.io/github/last-commit/danimart1991/jackett2telegram)](https://github.com/danimart1991/jackett2telegram/commits)
+[![Build](https://img.shields.io/github/actions/workflow/status/danimart1991/jackett2telegram/deploy.yml)](https://github.com/danimart1991/jackett2telegram/actions/workflows/deploy.yml)
 [![License](https://img.shields.io/github/license/danimart1991/jackett2telegram)](https://github.com/danimart1991/jackett2telegram/blob/main/LICENSE)
-
-[![Docker Cloud Build](https://img.shields.io/docker/cloud/build/danimart1991/jackett2telegram)](https://hub.docker.com/r/danimart1991/jackett2telegram)
 [![Docker Pulls](https://img.shields.io/docker/pulls/danimart1991/jackett2telegram)](https://hub.docker.com/r/danimart1991/jackett2telegram)
-[![Docker Stars](https://img.shields.io/docker/stars/danimart1991/jackett2telegram)](https://hub.docker.com/r/danimart1991/jackett2telegram)
 
 [![Tip Me via PayPal](https://img.shields.io/badge/PayPal-tip%20me-blue?logo=paypal&style=flat)](https://www.paypal.me/danimart1991)
 [![Sponsor Me via GitHub](https://img.shields.io/badge/GitHub-sponsor%20me-blue?logo=github&style=flat)](https://github.com/sponsors/danimart1991)
