@@ -504,7 +504,8 @@ async def post_init(application: Application) -> None:
         + f"\nDelay: {str(delay)} seconds"
         + f"\nLog Level: {logging.getLevelName(log_level)}"
     )
-    logging.info(f"{inspect.stack()[1][3]} - {msg.replace('\n', '  ')}")
+    clean_msg = msg.replace("\n", "  ")
+    logging.info(f"{inspect.stack()[1][3]} - {clean_msg}")
     await application.bot.send_message(chatid, msg)
 
 
@@ -512,25 +513,29 @@ async def post_init(application: Application) -> None:
 
 
 async def telegram_send_message(context: ContextTypes.DEFAULT_TYPE, msg: str) -> None:
-    logging.info(f"{inspect.stack()[1][3]} - {msg.replace('\n', '  ')}")
+    clean_msg = msg.replace("\n", "  ")
+    logging.info(f"{inspect.stack()[1][3]} - {clean_msg}")
     if bot := context.bot:
         await bot.send_message(chatid, f"*ERROR:* {msg}")
 
 
 async def telegram_send_error(context: ContextTypes.DEFAULT_TYPE, msg: str) -> None:
-    logging.error(f"{inspect.stack()[1][3]} - {msg.replace('\n', '  ')}")
+    clean_msg = msg.replace("\n", "  ")
+    logging.error(f"{inspect.stack()[1][3]} - {clean_msg}")
     if bot := context.bot:
         await bot.send_message(chatid, f"*ERROR:* {msg}")
 
 
 async def telegram_send_reply_text(update: Update, msg: str) -> None:
-    logging.info(f"{inspect.stack()[1][3]} - {msg.replace('\n', '  ')}")
+    clean_msg = msg.replace("\n", "  ")
+    logging.info(f"{inspect.stack()[1][3]} - {clean_msg}")
     if message := update.effective_message:
         await message.reply_text(msg)
 
 
 async def telegram_send_reply_error(update: Update, msg: str) -> None:
-    logging.error(f"{inspect.stack()[1][3]} - {msg.replace('\n', '  ')}")
+    clean_msg = msg.replace("\n", "  ")
+    logging.error(f"{inspect.stack()[1][3]} - {clean_msg}")
     if message := update.effective_message:
         await message.reply_text(f"*ERROR:* {msg}")
 
