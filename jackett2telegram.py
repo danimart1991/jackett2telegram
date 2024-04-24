@@ -1,3 +1,4 @@
+import inspect
 import logging
 import requests
 import os
@@ -6,15 +7,21 @@ import string
 import unicodedata
 import xml.etree.ElementTree as ElementTree
 from datetime import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, helpers
+from telegram import (
+    helpers,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    LinkPreviewOptions,
+    Update,
+)
 from telegram.ext import (
     Application,
-    ContextTypes,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
-    CallbackQueryHandler,
     Defaults,
 )
+from typing import Any
 from urllib import parse
 
 blackhole_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "blackhole")
@@ -36,15 +43,15 @@ token = os.environ["TOKEN"] if os.environ.get("TOKEN") else "<YOUR_TOKEN_HERE>"
 chatid = os.environ["CHATID"] if os.environ.get("CHATID") else "<YOUR_CHATID_HERE>"
 delay = int(os.environ["DELAY"]) if os.environ.get("DELAY") else 600
 log_level = (
-    levels.get(os.environ["LOG_LEVEL"].lower())
+    levels.get(os.environ["LOG_LEVEL"].lower(), "info")
     if os.environ.get("LOG_LEVEL")
     else logging.INFO
 )
 
-ns = {"torznab": "http://torznab.com/schemas/2015/feed"}
+
 rss_dict = {}
 
-valid_filename_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
+escaped_backslash = helpers.escape_markdown("-", 2)
 char_limit = 255
 
 logging.basicConfig(
@@ -55,7 +62,7 @@ logging.basicConfig(
 # SQLITE
 
 
-def init_sqlite():
+def init_sqlite() -> None:
     logging.debug("Trying to create the Database")
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
@@ -64,12 +71,12 @@ def init_sqlite():
     )
 
 
-def sqlite_connect():
+def sqlite_connect() -> None:
     global conn
     conn = sqlite3.connect(db_path, check_same_thread=False)
 
 
-def sqlite_load_all():
+def sqlite_load_all() -> list[Any]:
     sqlite_connect()
     c = conn.cursor()
     c.execute("SELECT * FROM rss")
@@ -80,7 +87,7 @@ def sqlite_load_all():
 
 def sqlite_write(
     name: str, link: str, last_pubdate: str, last_items: str, is_down: int
-):
+) -> None:
     sqlite_connect()
     c = conn.cursor()
     values = [(name), (link), (last_pubdate), (last_items), (is_down)]
@@ -95,7 +102,7 @@ def sqlite_write(
 # RSS
 
 
-def rss_load():
+def rss_load() -> None:
     # if the dict is not empty, empty it.
     if bool(rss_dict):
         rss_dict.clear()
@@ -104,7 +111,7 @@ def rss_load():
 
 
 async def cmd_rss_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not (its_me(update)):
+    if not its_me(update):
         return
 
     indexers = ["*List of Registered Indexers\.*"]
@@ -119,41 +126,42 @@ async def cmd_rss_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 + f"\nStatus: {('✔️' if rss_props[3] == 0 else '⚠')}"
             )
 
-    await update.effective_message.reply_text("\n\n".join(indexers))
+    await telegram_send_reply_text(update, "\n\n".join(indexers))
 
 
 async def cmd_rss_add(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not (its_me(update)):
+    if not its_me(update):
         return
-    # try if there are 2 arguments passed
-    if not len(context.args) == 2:
+
+    if not context.args or not len(context.args) == 2:
         await telegram_send_reply_error(
             update,
             "To add a new _Jackett RSS_ the command needs to be:\n`/add TITLE JACKETT_RSS_FEED_URL`",
         )
-        raise
-    # try if the url is a valid Jackett RSS feed
+        return
+
     try:
         response = requests.get(context.args[1])
         root = ElementTree.fromstring(response.content)
-        items = root.find("channel").findall("item")
+        channel = root.find("channel")
+        items = channel.findall("item") if channel else []
     except ElementTree.ParseError:
         await telegram_send_reply_error(
             update,
             "The link does not seem to be a _Jackett RSS Feed_ or is not supported\.",
         )
-        raise
+        return
     except requests.exceptions.MissingSchema:
         await telegram_send_reply_error(
             update, "The _Jackett RSS Feed Url_ is malformed\."
         )
-        raise
+        return
 
     items.sort(
-        reverse=True, key=lambda item: pubDate_to_datetime(item.find("pubDate").text)
+        reverse=True, key=lambda item: pubDate_to_datetime(item.findtext("pubDate", ""))
     )
     sqlite_write(
-        context.args[0], context.args[1], items[0].find("pubDate").text, str([]), 0
+        context.args[0], context.args[1], items[0].findtext("pubDate", ""), str([]), 0
     )
     rss_load()
     logging.info(f"List: Indexer {context.args[0]} | {context.args[1]} added.")
@@ -161,21 +169,20 @@ async def cmd_rss_add(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         f"*Indexer added to list:* {helpers.escape_markdown(context.args[0], 2)}"
         + f"\n`{helpers.escape_markdown(context.args[1], 2)}`"
     )
-    await update.effective_message.reply_text(message)
+    await telegram_send_reply_text(update, message)
 
 
 async def cmd_rss_remove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not (its_me(update)):
+    if not its_me(update):
         return
-    # try if there are 1 arguments passed
-    try:
-        context.args[0]
-    except IndexError:
+
+    if not context.args or not len(context.args) == 1:
         await telegram_send_reply_error(
             update,
             "To remove a _Jackett RSS_ the command needs to be:\n`/remove TITLE`",
         )
-        raise
+        return
+
     sqlite_connect()
     c = conn.cursor()
     q = (context.args[0],)
@@ -188,25 +195,27 @@ async def cmd_rss_remove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 update,
                 f"Can't remove _Jackett RSS_ with title _{escaped_indexer}_\. Not found\.",
             )
-            raise KeyError(f"Indexer with name {context.args[0]} not found.")
+            return
         c.execute("DELETE FROM rss WHERE name = ?", q)
         conn.commit()
         conn.close()
-    except sqlite3.Error as e:
+    except sqlite3.Error:
         await telegram_send_reply_error(
             update, "Can't remove the _Jackett RSS_ because of an unknown issue\."
         )
-        raise
+        return
     rss_load()
-    logging.info(f"List: Indexer {context.args[0]} removed.")
-    message = f"*Indexer removed from list:* {escaped_indexer}"
-    await update.effective_message.reply_text(message)
+
+    await telegram_send_reply_text(
+        update, f"*Indexer removed from list:* {escaped_indexer}"
+    )
 
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not (its_me(update)):
+    if not its_me(update):
         return
-    await update.effective_message.reply_text(
+
+    msg = (
         "*Jackett2Telegram \(Jackett RSS to Telegram Bot\)*"
         + "\n\nAfter successfully adding a Jackett RSS link, the bot starts fetching the feed every "
         f"{str(delay)} seconds\. \(This can be set\)"
@@ -218,40 +227,46 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         + "\n\- /list \- Lists all the titles and the asociated Jackett RSS links from the DB\."
         + "\n\- /test JACKETT\_RSS\_FEED\_URL \- Inbuilt command that fetches a post \(usually latest\) from a Jackett RSS\."
         + "\n\nIn order to use *Blackhole*, your _Torrent_ client must support it and be configured to point to *Jackett2Telegram* _Blackhole_ folder\."
-        "\n\nIf you like the project, consider sponsor it on [GitHub](https://github\.com/danimart1991/jackett2telegram)\."
+        "\n\nIf you like the project, consider sponsorship on [GitHub](https://github\.com/danimart1991/jackett2telegram)\."
     )
 
+    if update.effective_message:
+        await update.effective_message.reply_text(msg)
+    elif context.bot:
+        await context.bot.send_message(chatid, msg)
 
-async def rss_monitor(context: ContextTypes.DEFAULT_TYPE):
+
+async def rss_monitor(context: ContextTypes.DEFAULT_TYPE) -> None:
     for rss_name, rss_props in rss_dict.items():
         try:
             response = requests.get(rss_props[0])
             root = ElementTree.fromstring(response.content)
-            items = root.find("channel").findall("item")
+            channel = root.find("channel")
+            items = channel.findall("item") if channel else []
             last_pubdate_datetime = pubDate_to_datetime(rss_props[1])
             filteredItems = filter(
-                lambda item: pubDate_to_datetime(item.find("pubDate").text)
+                lambda item: pubDate_to_datetime(item.findtext("pubDate", ""))
                 >= last_pubdate_datetime,
                 items,
             )
             sortedFilteredItems = sorted(
                 filteredItems,
-                key=lambda item: pubDate_to_datetime(item.find("pubDate").text),
+                key=lambda item: pubDate_to_datetime(item.findtext("pubDate", "")),
             )
 
             if sortedFilteredItems:
                 last_items = eval(rss_props[2])
                 for item in sortedFilteredItems:
-                    item_guid = item.find("guid").text
+                    item_guid = item.findtext("guid", "")
                     if item_guid not in last_items:
                         last_items.append(item_guid)
-                        jackettitem_to_telegram(context, item, rss_name)
+                        await jackettitem_to_telegram(context, item, rss_name)
 
                 itemsCount = len(items)
                 while len(last_items) > itemsCount:
                     last_items.pop(0)
 
-                new_pubdate = sortedFilteredItems[-1].find("pubDate").text
+                new_pubdate = sortedFilteredItems[-1].findtext("pubDate", "")
                 sqlite_write(rss_name, rss_props[0], new_pubdate, str(last_items), 0)
         except:
             if rss_props[3] != 1:
@@ -267,113 +282,72 @@ async def rss_monitor(context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not (its_me(update)):
+    if not its_me(update):
         return
-    # try if there are 1 arguments passed
-    try:
-        context.args[0]
-    except IndexError:
+
+    if not context.args or not context.args[0]:
+        logging.error(f"User calls command /test with invalid arguments.")
         await telegram_send_reply_error(
             update, "The format needs to be:\n`/test JACKETT\_RSS\_FEED\_URL`"
         )
-        raise
-    # try if the url is a valid Jackett RSS feed
+        return
+
     try:
         response = requests.get(context.args[0])
         root = ElementTree.fromstring(response.content)
-        title = root.find("channel").find("title").text
-        items = root.find("channel").findall("item")
+        channel = root.find("channel")
+        if channel is None:
+            return
+        title = channel.findtext("title", default="")
+        items = channel.findall("item")
     except ElementTree.ParseError:
         await telegram_send_reply_error(
             update,
             "The link does not seem to be a _Jackett RSS Feed_ or is not supported\.",
         )
-        raise
+        return
     except requests.exceptions.MissingSchema:
         await telegram_send_reply_error(
             update, "The _Jackett RSS Feed Url_ is malformed\."
         )
-        raise
+        return
 
     items.sort(
-        reverse=True, key=lambda item: pubDate_to_datetime(item.find("pubDate").text)
+        reverse=True, key=lambda item: pubDate_to_datetime(item.findtext("pubDate", ""))
     )
     await jackettitem_to_telegram(context, items[0], title)
 
 
-def pubDate_to_datetime(pubDate: str):
-    return datetime.strptime(pubDate, "%a, %d %b %Y %H:%M:%S %z")
-
-
-def parse_downloadvolumefactor(value: float):
-    if value == 0:
-        return "🔥 FREELEECH 🔥\n"
-    elif value == 0.5:
-        return "🌟 50% DOWNLOAD 🌟\n"
-    return ""
-
-
-def parse_uploadvolumefactor(value: float):
-    if value > 1:
-        return f"💎 {str(int(value*100))}% UPLOAD 💎"
-    return ""
-
-
-def parse_category(category: str):
-    try:
-        value = int(category) // 1000
-    except ValueError:
-        value = -1
-        logging.exception(f"Category: {category} is not an Integer")
-    return value
-
-
-def parse_categoryIcon(category: int):
-    if category == 1:
-        return "🎮"
-    elif category == 2:
-        return "🎬"
-    elif category == 3:
-        return "🎵"
-    elif category == 4:
-        return "💾"
-    elif category == 5:
-        return "📺"
-    elif category == 6:
-        return "🔶"
-    elif category == 7:
-        return "📕"
-    elif category == 8:
-        return "❓"
-    return ""
-
-
-def jackettitem_to_telegram(
-    context: CallbackContext, item: ElementTree.Element, rssName: str
-):
+async def jackettitem_to_telegram(
+    context: ContextTypes.DEFAULT_TYPE, item: ElementTree.Element, rssName: str
+) -> None:
     coverurl = None
-    title = helpers.escape_markdown(item.find("title").text, 2)
+    title = helpers.escape_markdown(
+        item.findtext("title", default=escaped_backslash), 2
+    )
     category = (
-        parse_category(item.find("category").text) if item.findall("category") else -1
+        parse_category(item.findtext("category", ""))
+        if item.findall("category")
+        else -1
     )
     icons = [parse_categoryIcon(category)]
     trackerName = helpers.escape_markdown(rssName, 2)
     externalLinks = []
-    seeders = "\-"
-    peers = "\-"
-    grabs = item.find("grabs").text if item.findall("grabs") else "\-"
-    files = item.find("files").text if item.findall("files") else "\-"
+    seeders = escaped_backslash
+    peers = escaped_backslash
+    grabs = item.findtext("grabs", default=escaped_backslash)
+    files = item.findtext("files", default=escaped_backslash)
     uploadvolumefactor = ""
     downloadvolumefactor = ""
     downloadUrl = ""
     magnetUrl = ""
 
     size = helpers.escape_markdown(
-        str(round(float(item.find("size").text) / 1073741824, 2)) + "GiB", 2
+        str(round(float(item.findtext("size", default=0)) / 1073741824, 2)) + "GiB", 2
     )
 
-    guid = item.find("guid").text if item.findall("guid") else None
-    link = item.find("link").text if item.findall("link") else None
+    guid = item.findtext("guid", default=None)
+    link = item.findtext("link", default=None)
     if guid and guid.startswith("magnet:"):
         magnetUrl = helpers.escape_markdown(guid, 2)
     elif not magnetUrl and link and link.startswith("magnet:"):
@@ -383,7 +357,9 @@ def jackettitem_to_telegram(
 
     keyboard = [[]]
     if item.findall("comments"):
-        keyboard[0].append(InlineKeyboardButton("🔗", url=item.find("comments").text))
+        keyboard[0].append(
+            InlineKeyboardButton("🔗", url=item.findtext("comments", default=None))
+        )
     if downloadUrl:
         if magnetUrl:
             keyboard[0].append(InlineKeyboardButton("🧲", url=downloadUrl))
@@ -391,18 +367,19 @@ def jackettitem_to_telegram(
             keyboard[0].append(InlineKeyboardButton("💾", url=downloadUrl))
             keyboard[0].append(InlineKeyboardButton("🕳", callback_data="blackhole"))
     reply_markup = InlineKeyboardMarkup(keyboard)
+    ns = {"torznab": "http://torznab.com/schemas/2015/feed"}
 
     for torznabattr in item.findall("torznab:attr", ns):
         torznabattr_name = torznabattr.get("name")
         if torznabattr_name == "downloadvolumefactor":
             downloadvolumefactor = parse_downloadvolumefactor(
-                float(torznabattr.get("value"))
+                float(torznabattr.get("value", 0))
             )
             if downloadvolumefactor:
                 icons.append(downloadvolumefactor[:1])
         elif torznabattr_name == "uploadvolumefactor":
             uploadvolumefactor = parse_uploadvolumefactor(
-                float(torznabattr.get("value"))
+                float(torznabattr.get("value", 0))
             )
             if uploadvolumefactor:
                 icons.append(uploadvolumefactor[:1])
@@ -440,67 +417,47 @@ def jackettitem_to_telegram(
     if coverurl:
         try:
             coverraw = requests.get(coverurl, stream=True).raw
-            context.bot.send_photo(
+            await context.bot.send_photo(
                 chatid,
                 photo=coverraw,
                 caption=message,
                 reply_markup=reply_markup,
-                parse_mode="MARKDOWNV2",
             )
             return
         # Error, most of the times is a Image 400 Bad Request, without reason.
         except:
-            logging.exception(
+            logging.warning(
                 "Error sending release with cover. Trying to send without cover."
             )
-            pass
-
-    context.bot.send_message(
-        chatid, message, reply_markup=reply_markup, parse_mode="MARKDOWNV2"
-    )
+            await context.bot.send_message(chatid, message, reply_markup=reply_markup)
 
 
-# Telegram
-
-
-async def telegram_send_reply_error(update: Update, msg: str):
-    await update.effective_message.reply_text(f"*ERROR:* {msg}", quote=True)
-
-
-def its_me(update: Update):
-    return str(update.effective_chat.id) == chatid
-
-
-# Utils
-
-
-async def cbq_to_blackhole(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not (its_me(update)):
+async def cbq_to_blackhole(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not its_me(update):
         return
 
-    query = update.callback_query
-    try:
-        query.answer()
-    except:
-        pass
+    if (
+        not (message := update.effective_message)
+        or not (reply_markup := message.reply_markup)
+        or not (query := update.callback_query)
+    ):
+        await telegram_send_error(context, "The message cannot be found.")
+        return
 
-    inline_keyboard_zero = list(
-        update.effective_message.reply_markup.inline_keyboard[0]
-    )
+    await query.answer()
+
+    inline_keyboard_zero = list(reply_markup.inline_keyboard[0])
     inline_keyboard_zero.pop()
-    inline_keyboard_zero.append(
-        InlineKeyboardButton("⏳", callback_data=update.callback_query.data)
-    )
-    reply_markup = InlineKeyboardMarkup([inline_keyboard_zero])
+    inline_keyboard_zero.append(InlineKeyboardButton("⏳", callback_data=query.data))
 
     await context.bot.edit_message_reply_markup(
-        chat_id=update.effective_message.chat_id,
-        message_id=update.effective_message.message_id,
-        reply_markup=update.effective_message.reply_markup,
+        chat_id=message.chat_id,
+        message_id=message.message_id,
+        reply_markup=InlineKeyboardMarkup([inline_keyboard_zero]),
     )
 
     msg = None
-    torrent_url = update.effective_message.reply_markup.inline_keyboard[0][1].url
+    torrent_url = reply_markup.inline_keyboard[0][1].url
     if torrent_url:
         torrent_file = parse.parse_qs(parse.urlparse(torrent_url).query)["file"][0]
         if torrent_file:
@@ -517,8 +474,8 @@ async def cbq_to_blackhole(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if exception.args[0] and "magnet:?" in exception.args[0]:
                     msg = "It seems that the torrent is a magnet file, it can't be added using blackhole, please use another option\."
                 else:
-                    print(exception)
-                msg = "Can't obtain `.Torrent` file\."
+                    logging.exception(exception)
+                    msg = "Can't obtain `.Torrent` file data\."
         else:
             msg = "Can't obtain `.Torrent` file name\."
     else:
@@ -527,35 +484,78 @@ async def cbq_to_blackhole(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if msg:
         button_msg = "❌"
         await telegram_send_reply_error(update, msg)
-        logging.error(f"Blackhole - {msg}")
 
-    inline_keyboard_zero = list(
-        update.effective_message.reply_markup.inline_keyboard[0]
-    )
     inline_keyboard_zero.pop()
     inline_keyboard_zero.append(
-        InlineKeyboardButton(button_msg, callback_data=update.callback_query.data)
+        InlineKeyboardButton(button_msg, callback_data=query.data)
     )
-    reply_markup = InlineKeyboardMarkup([inline_keyboard_zero])
 
     await context.bot.edit_message_reply_markup(
-        chat_id=update.effective_message.chat_id,
-        message_id=update.effective_message.message_id,
-        reply_markup=reply_markup,
+        chat_id=message.chat_id,
+        message_id=message.message_id,
+        reply_markup=InlineKeyboardMarkup([inline_keyboard_zero]),
     )
 
 
-def clean_filename(filename, whitelist=valid_filename_chars, replace=" "):
+async def post_init(application: Application) -> None:
+    msg = (
+        "*Jackett2Telegram has started\.*"
+        + f"\nRSS Indexers: {str(len(rss_dict))}"
+        + f"\nDelay: {str(delay)} seconds"
+        + f"\nLog Level: {logging.getLevelName(log_level)}"
+    )
+    logging.info(f"{inspect.stack()[1][3]} - {msg.replace('\n', '  ')}")
+    await application.bot.send_message(chatid, msg)
+
+
+# Telegram
+
+
+async def telegram_send_message(context: ContextTypes.DEFAULT_TYPE, msg: str) -> None:
+    logging.info(f"{inspect.stack()[1][3]} - {msg.replace('\n', '  ')}")
+    if bot := context.bot:
+        await bot.send_message(chatid, f"*ERROR:* {msg}")
+
+
+async def telegram_send_error(context: ContextTypes.DEFAULT_TYPE, msg: str) -> None:
+    logging.error(f"{inspect.stack()[1][3]} - {msg.replace('\n', '  ')}")
+    if bot := context.bot:
+        await bot.send_message(chatid, f"*ERROR:* {msg}")
+
+
+async def telegram_send_reply_text(update: Update, msg: str) -> None:
+    logging.info(f"{inspect.stack()[1][3]} - {msg.replace('\n', '  ')}")
+    if message := update.effective_message:
+        await message.reply_text(msg)
+
+
+async def telegram_send_reply_error(update: Update, msg: str) -> None:
+    logging.error(f"{inspect.stack()[1][3]} - {msg.replace('\n', '  ')}")
+    if message := update.effective_message:
+        await message.reply_text(f"*ERROR:* {msg}")
+
+
+def its_me(update: Update) -> bool:
+    return str(update.effective_chat.id) == chatid if update.effective_chat else False
+
+
+# Utils
+
+
+def clean_filename(filename) -> str:
     # replace spaces
-    for r in replace:
-        filename = filename.replace(r, "_")
+    for r in " ":
+        cleaned_filename = filename.replace(r, "_")
 
     # keep only valid ascii chars
     cleaned_filename = (
-        unicodedata.normalize("NFKD", filename).encode("ASCII", "ignore").decode()
+        unicodedata.normalize("NFKD", cleaned_filename)
+        .encode("ASCII", "ignore")
+        .decode()
     )
 
     # keep only whitelisted chars
+    whitelist = "-_.() %s%s" % (string.ascii_letters, string.digits)
     cleaned_filename = "".join(c for c in cleaned_filename if c in whitelist)
     if len(cleaned_filename) > char_limit:
         logging.warning(
@@ -564,12 +564,61 @@ def clean_filename(filename, whitelist=valid_filename_chars, replace=" "):
     return cleaned_filename[:char_limit]
 
 
+def pubDate_to_datetime(pubDate: str) -> datetime:
+    return datetime.strptime(pubDate, "%a, %d %b %Y %H:%M:%S %z")
+
+
+def parse_downloadvolumefactor(value: float) -> str:
+    if value == 0:
+        return "🔥 FREELEECH 🔥\n"
+    elif value == 0.5:
+        return "🌟 50% DOWNLOAD 🌟\n"
+    return ""
+
+
+def parse_uploadvolumefactor(value: float) -> str:
+    if value > 1:
+        return f"💎 {str(int(value*100))}% UPLOAD 💎"
+    return ""
+
+
+def parse_category(category: str) -> int:
+    try:
+        value = int(category) // 1000
+    except ValueError:
+        value = -1
+        logging.exception(f"Category: {category} is not an Integer")
+    return value
+
+
+def parse_categoryIcon(category: int) -> str:
+    if category == 1:
+        return "🎮"
+    elif category == 2:
+        return "🎬"
+    elif category == 3:
+        return "🎵"
+    elif category == 4:
+        return "💾"
+    elif category == 5:
+        return "📺"
+    elif category == 6:
+        return "🔶"
+    elif category == 7:
+        return "📕"
+    elif category == 8:
+        return "❓"
+    return ""
+
+
 # Main
 
 
 def main() -> None:
     defaults = Defaults(
-        disable_web_page_preview=True, do_quote=True, parse_mode="MARKDOWNV2"
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
+        do_quote=True,
+        parse_mode="MARKDOWNV2",
     )
     application = (
         Application.builder()
@@ -578,9 +627,6 @@ def main() -> None:
         .post_init(post_init)
         .build()
     )
-    # updater = Updater(token=token, use_context=True)
-    job_queue = application.job_queue
-    # dp = updater.dispatcher
 
     application.add_handler(CommandHandler("add", cmd_rss_add))
     application.add_handler(CommandHandler("help", cmd_help))
@@ -595,12 +641,13 @@ def main() -> None:
     except sqlite3.OperationalError:
         logging.exception("Fail trying to create the Database.")
         pass
+
     rss_load()
 
-    job_queue.run_repeating(rss_monitor, delay)
+    if job_queue := application.job_queue:
+        job_queue.run_repeating(rss_monitor, delay)
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
-    application.idle()
     conn.close()
 
 
