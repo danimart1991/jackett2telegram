@@ -6,15 +6,15 @@ import string
 import unicodedata
 import xml.etree.ElementTree as ElementTree
 from datetime import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, helpers
 from telegram.ext import (
-    Updater,
+    Application,
+    ContextTypes,
     CommandHandler,
-    CallbackContext,
+    ContextTypes,
     CallbackQueryHandler,
     Defaults,
 )
-from telegram.utils import helpers
 from urllib import parse
 
 blackhole_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "blackhole")
@@ -103,7 +103,7 @@ def rss_load():
         rss_dict[row[0]] = (row[1], row[2], row[3], row[4])
 
 
-def cmd_rss_list(update: Update, context: CallbackContext):
+async def cmd_rss_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not (its_me(update)):
         return
 
@@ -119,17 +119,15 @@ def cmd_rss_list(update: Update, context: CallbackContext):
                 + f"\nStatus: {('✔️' if rss_props[3] == 0 else '⚠')}"
             )
 
-    update.effective_message.reply_markdown_v2("\n\n".join(indexers))
+    await update.effective_message.reply_text("\n\n".join(indexers))
 
 
-def cmd_rss_add(update: Update, context: CallbackContext):
+async def cmd_rss_add(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not (its_me(update)):
         return
     # try if there are 2 arguments passed
-    try:
-        context.args[1]
-    except IndexError:
-        telegram_send_reply_error(
+    if not len(context.args) == 2:
+        await telegram_send_reply_error(
             update,
             "To add a new _Jackett RSS_ the command needs to be:\n`/add TITLE JACKETT_RSS_FEED_URL`",
         )
@@ -140,13 +138,15 @@ def cmd_rss_add(update: Update, context: CallbackContext):
         root = ElementTree.fromstring(response.content)
         items = root.find("channel").findall("item")
     except ElementTree.ParseError:
-        telegram_send_reply_error(
+        await telegram_send_reply_error(
             update,
             "The link does not seem to be a _Jackett RSS Feed_ or is not supported\.",
         )
         raise
     except requests.exceptions.MissingSchema:
-        telegram_send_reply_error(update, "The _Jackett RSS Feed Url_ is malformed\.")
+        await telegram_send_reply_error(
+            update, "The _Jackett RSS Feed Url_ is malformed\."
+        )
         raise
 
     items.sort(
@@ -156,24 +156,22 @@ def cmd_rss_add(update: Update, context: CallbackContext):
         context.args[0], context.args[1], items[0].find("pubDate").text, str([]), 0
     )
     rss_load()
-    logging.info(
-        "List: Indexer " + context.args[0] + " | " + context.args[1] + " added."
-    )
+    logging.info(f"List: Indexer {context.args[0]} | {context.args[1]} added.")
     message = (
         f"*Indexer added to list:* {helpers.escape_markdown(context.args[0], 2)}"
         + f"\n`{helpers.escape_markdown(context.args[1], 2)}`"
     )
-    update.effective_message.reply_markdown_v2(message)
+    await update.effective_message.reply_text(message)
 
 
-def cmd_rss_remove(update: Update, context: CallbackContext):
+async def cmd_rss_remove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not (its_me(update)):
         return
     # try if there are 1 arguments passed
     try:
         context.args[0]
     except IndexError:
-        telegram_send_reply_error(
+        await telegram_send_reply_error(
             update,
             "To remove a _Jackett RSS_ the command needs to be:\n`/remove TITLE`",
         )
@@ -186,29 +184,29 @@ def cmd_rss_remove(update: Update, context: CallbackContext):
         c.execute("SELECT count(*) FROM rss WHERE name = ?", q)
         res = c.fetchall()[0][0]
         if not (int(res) == 1):
-            telegram_send_reply_error(
+            await telegram_send_reply_error(
                 update,
                 f"Can't remove _Jackett RSS_ with title _{escaped_indexer}_\. Not found\.",
             )
-            raise KeyError("Indexer with name " + context.args[0] + " not found.")
+            raise KeyError(f"Indexer with name {context.args[0]} not found.")
         c.execute("DELETE FROM rss WHERE name = ?", q)
         conn.commit()
         conn.close()
     except sqlite3.Error as e:
-        telegram_send_reply_error(
+        await telegram_send_reply_error(
             update, "Can't remove the _Jackett RSS_ because of an unknown issue\."
         )
         raise
     rss_load()
-    logging.info("List: Indexer " + context.args[0] + " removed.")
+    logging.info(f"List: Indexer {context.args[0]} removed.")
     message = f"*Indexer removed from list:* {escaped_indexer}"
-    update.effective_message.reply_markdown_v2(message)
+    await update.effective_message.reply_text(message)
 
 
-def cmd_help(update: Update, context: CallbackContext):
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not (its_me(update)):
         return
-    update.effective_message.reply_markdown_v2(
+    await update.effective_message.reply_text(
         "*Jackett2Telegram \(Jackett RSS to Telegram Bot\)*"
         + "\n\nAfter successfully adding a Jackett RSS link, the bot starts fetching the feed every "
         f"{str(delay)} seconds\. \(This can be set\)"
@@ -224,7 +222,7 @@ def cmd_help(update: Update, context: CallbackContext):
     )
 
 
-def rss_monitor(context: CallbackContext):
+async def rss_monitor(context: ContextTypes.DEFAULT_TYPE):
     for rss_name, rss_props in rss_dict.items():
         try:
             response = requests.get(rss_props[0])
@@ -257,11 +255,8 @@ def rss_monitor(context: CallbackContext):
                 sqlite_write(rss_name, rss_props[0], new_pubdate, str(last_items), 0)
         except:
             if rss_props[3] != 1:
-                msg = (
-                    "Indexer not available due to some issue: "
-                    + helpers.escape_markdown(rss_name, 2)
-                )
-                context.bot.send_message(
+                msg = f"Indexer not available due to some issue: {helpers.escape_markdown(rss_name, 2)}"
+                await context.bot.send_message(
                     chatid, f"*ERROR:* {msg}", parse_mode="MARKDOWNV2"
                 )
                 logging.exception(msg)
@@ -271,14 +266,14 @@ def rss_monitor(context: CallbackContext):
     rss_load()
 
 
-def cmd_test(update: Update, context: CallbackContext):
+async def cmd_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not (its_me(update)):
         return
     # try if there are 1 arguments passed
     try:
         context.args[0]
     except IndexError:
-        telegram_send_reply_error(
+        await telegram_send_reply_error(
             update, "The format needs to be:\n`/test JACKETT\_RSS\_FEED\_URL`"
         )
         raise
@@ -289,19 +284,21 @@ def cmd_test(update: Update, context: CallbackContext):
         title = root.find("channel").find("title").text
         items = root.find("channel").findall("item")
     except ElementTree.ParseError:
-        telegram_send_reply_error(
+        await telegram_send_reply_error(
             update,
             "The link does not seem to be a _Jackett RSS Feed_ or is not supported\.",
         )
         raise
     except requests.exceptions.MissingSchema:
-        telegram_send_reply_error(update, "The _Jackett RSS Feed Url_ is malformed\.")
+        await telegram_send_reply_error(
+            update, "The _Jackett RSS Feed Url_ is malformed\."
+        )
         raise
 
     items.sort(
         reverse=True, key=lambda item: pubDate_to_datetime(item.find("pubDate").text)
     )
-    jackettitem_to_telegram(context, items[0], title)
+    await jackettitem_to_telegram(context, items[0], title)
 
 
 def pubDate_to_datetime(pubDate: str):
@@ -466,8 +463,8 @@ def jackettitem_to_telegram(
 # Telegram
 
 
-def telegram_send_reply_error(update: Update, msg: str):
-    update.effective_message.reply_markdown_v2(f"*ERROR:* {msg}", quote=True)
+async def telegram_send_reply_error(update: Update, msg: str):
+    await update.effective_message.reply_text(f"*ERROR:* {msg}", quote=True)
 
 
 def its_me(update: Update):
@@ -477,7 +474,7 @@ def its_me(update: Update):
 # Utils
 
 
-def cbq_to_blackhole(update: Update, context: CallbackContext):
+async def cbq_to_blackhole(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not (its_me(update)):
         return
 
@@ -487,12 +484,16 @@ def cbq_to_blackhole(update: Update, context: CallbackContext):
     except:
         pass
 
-    update.effective_message.reply_markup.inline_keyboard[0].pop()
-    update.effective_message.reply_markup.inline_keyboard[0].append(
+    inline_keyboard_zero = list(
+        update.effective_message.reply_markup.inline_keyboard[0]
+    )
+    inline_keyboard_zero.pop()
+    inline_keyboard_zero.append(
         InlineKeyboardButton("⏳", callback_data=update.callback_query.data)
     )
+    reply_markup = InlineKeyboardMarkup([inline_keyboard_zero])
 
-    context.bot.edit_message_reply_markup(
+    await context.bot.edit_message_reply_markup(
         chat_id=update.effective_message.chat_id,
         message_id=update.effective_message.message_id,
         reply_markup=update.effective_message.reply_markup,
@@ -525,18 +526,22 @@ def cbq_to_blackhole(update: Update, context: CallbackContext):
 
     if msg:
         button_msg = "❌"
-        telegram_send_reply_error(update, msg)
+        await telegram_send_reply_error(update, msg)
         logging.error(f"Blackhole - {msg}")
 
-    update.effective_message.reply_markup.inline_keyboard[0].pop()
-    update.effective_message.reply_markup.inline_keyboard[0].append(
+    inline_keyboard_zero = list(
+        update.effective_message.reply_markup.inline_keyboard[0]
+    )
+    inline_keyboard_zero.pop()
+    inline_keyboard_zero.append(
         InlineKeyboardButton(button_msg, callback_data=update.callback_query.data)
     )
+    reply_markup = InlineKeyboardMarkup([inline_keyboard_zero])
 
-    context.bot.edit_message_reply_markup(
+    await context.bot.edit_message_reply_markup(
         chat_id=update.effective_message.chat_id,
         message_id=update.effective_message.message_id,
-        reply_markup=update.effective_message.reply_markup,
+        reply_markup=reply_markup,
     )
 
 
@@ -562,26 +567,27 @@ def clean_filename(filename, whitelist=valid_filename_chars, replace=" "):
 # Main
 
 
-def main():
-    updater = Updater(token=token, use_context=True)
-    job_queue = updater.job_queue
-    dp = updater.dispatcher
-
-    dp.add_handler(CommandHandler("add", cmd_rss_add))
-    dp.add_handler(CommandHandler("help", cmd_help))
-    dp.add_handler(
-        CommandHandler(
-            "test",
-            cmd_test,
-        )
+def main() -> None:
+    defaults = Defaults(
+        disable_web_page_preview=True, do_quote=True, parse_mode="MARKDOWNV2"
     )
-    dp.add_handler(CommandHandler("list", cmd_rss_list))
-    dp.add_handler(CommandHandler("remove", cmd_rss_remove))
-    dp.add_handler(CallbackQueryHandler(cbq_to_blackhole))
-
-    updater.bot.defaults = Defaults(
-        disable_web_page_preview=True, quote=True, parse_mode="MARKDOWNV2"
+    application = (
+        Application.builder()
+        .token(token)
+        .defaults(defaults)
+        .post_init(post_init)
+        .build()
     )
+    # updater = Updater(token=token, use_context=True)
+    job_queue = application.job_queue
+    # dp = updater.dispatcher
+
+    application.add_handler(CommandHandler("add", cmd_rss_add))
+    application.add_handler(CommandHandler("help", cmd_help))
+    application.add_handler(CommandHandler("test", cmd_test))
+    application.add_handler(CommandHandler("list", cmd_rss_list))
+    application.add_handler(CommandHandler("remove", cmd_rss_remove))
+    application.add_handler(CallbackQueryHandler(cbq_to_blackhole))
 
     # Try to create a database if missing
     try:
@@ -591,18 +597,10 @@ def main():
         pass
     rss_load()
 
-    welcome_message = (
-        "*Jackett2Telegram has started\.*"
-        + f"\nRSS Indexers: {str(len(rss_dict))}"
-        + f"\nDelay: {str(delay)} seconds"
-        + f"\nLog Level: {logging.getLevelName(log_level)}"
-    )
-    updater.bot.send_message(chatid, welcome_message, parse_mode="MARKDOWNV2")
-
     job_queue.run_repeating(rss_monitor, delay)
 
-    updater.start_polling()
-    updater.idle()
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    application.idle()
     conn.close()
 
 
