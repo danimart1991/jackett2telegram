@@ -144,7 +144,7 @@ async def cmd_rss_add(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         response = requests.get(context.args[1])
         root = ElementTree.fromstring(response.content)
         channel = root.find("channel")
-        items = channel.findall("item") if channel else []
+        items = channel.findall("item") if channel is not None else []
     except ElementTree.ParseError:
         await telegram_send_reply_error(
             update,
@@ -242,7 +242,7 @@ async def rss_monitor(context: ContextTypes.DEFAULT_TYPE) -> None:
             response = requests.get(rss_props[0])
             root = ElementTree.fromstring(response.content)
             channel = root.find("channel")
-            items = channel.findall("item") if channel else []
+            items = channel.findall("item") if channel is not None else []
             last_pubdate_datetime = pubDate_to_datetime(rss_props[1])
             filteredItems = filter(
                 lambda item: pubDate_to_datetime(item.findtext("pubDate", ""))
@@ -429,7 +429,8 @@ async def jackettitem_to_telegram(
             logging.warning(
                 "Error sending release with cover. Trying to send without cover."
             )
-            await context.bot.send_message(chatid, message, reply_markup=reply_markup)
+
+    await context.bot.send_message(chatid, message, reply_markup=reply_markup)
 
 
 async def cbq_to_blackhole(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
