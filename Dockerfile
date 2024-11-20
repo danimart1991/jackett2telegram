@@ -17,4 +17,4 @@ ENV DELAY 600
 ENV LOG_LEVEL INFO
 
 # Run app.py when the container launches
-CMD ["python", "jackett2telegram.py", "--token", TOKEN, "--chat_id", CHATID, "--delay", DELAY, "--log_level", LOG_LEVEL]
+CMD ["sh", "-c", "python jackett2telegram.py --token ${TOKEN} --chat_id ${CHATID} --delay ${DELAY} --log_level ${LOG_LEVEL}"]
