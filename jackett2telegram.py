@@ -1,4 +1,5 @@
 import inspect
+import argparse
 import logging
 import requests
 import os
@@ -30,33 +31,10 @@ db_path = os.path.join(config_path, "rss.db")
 os.makedirs(blackhole_path, exist_ok=True)
 os.makedirs(config_path, exist_ok=True)
 
-levels = {
-    "critical": logging.CRITICAL,
-    "error": logging.ERROR,
-    "warn": logging.WARNING,
-    "warning": logging.WARNING,
-    "info": logging.INFO,
-    "debug": logging.DEBUG,
-}
-
-token = os.environ["TOKEN"] if os.environ.get("TOKEN") else "<YOUR_TOKEN_HERE>"
-chatid = os.environ["CHATID"] if os.environ.get("CHATID") else "<YOUR_CHATID_HERE>"
-delay = int(os.environ["DELAY"]) if os.environ.get("DELAY") else 600
-log_level = (
-    levels.get(os.environ["LOG_LEVEL"].lower(), "info")
-    if os.environ.get("LOG_LEVEL")
-    else logging.INFO
-)
-
-
 rss_dict = {}
 
 escaped_backslash = helpers.escape_markdown("-", 2)
 char_limit = 255
-
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=log_level
-)
 
 
 # SQLITE
@@ -233,7 +211,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_message:
         await update.effective_message.reply_text(msg)
     elif context.bot:
-        await context.bot.send_message(chatid, msg)
+        await context.bot.send_message(chat_id, msg)
 
 
 async def rss_monitor(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -272,7 +250,7 @@ async def rss_monitor(context: ContextTypes.DEFAULT_TYPE) -> None:
             if rss_props[3] != 1:
                 msg = f"Indexer not available due to some issue: {helpers.escape_markdown(rss_name, 2)}"
                 await context.bot.send_message(
-                    chatid, f"*ERROR:* {msg}", parse_mode="MARKDOWNV2"
+                    chat_id, f"*ERROR:* {msg}", parse_mode="MARKDOWNV2"
                 )
                 logging.exception(msg)
                 sqlite_write(rss_name, rss_props[0], rss_props[1], rss_props[2], 1)
@@ -418,7 +396,7 @@ async def jackettitem_to_telegram(
         try:
             coverraw = requests.get(coverurl, stream=True).raw
             await context.bot.send_photo(
-                chatid,
+                chat_id,
                 photo=coverraw,
                 caption=message,
                 reply_markup=reply_markup,
@@ -430,7 +408,7 @@ async def jackettitem_to_telegram(
                 "Error sending release with cover. Trying to send without cover."
             )
 
-    await context.bot.send_message(chatid, message, reply_markup=reply_markup)
+    await context.bot.send_message(chat_id, message, reply_markup=reply_markup)
 
 
 async def cbq_to_blackhole(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -503,11 +481,11 @@ async def post_init(application: Application) -> None:
         "*Jackett2Telegram has started\.*"
         + f"\nRSS Indexers: {str(len(rss_dict))}"
         + f"\nDelay: {str(delay)} seconds"
-        + f"\nLog Level: {logging.getLevelName(log_level)}"
+        + f"\nLog Level: {log_level}"
     )
     clean_msg = msg.replace("\n", "  ")
     logging.info(f"{inspect.stack()[1][3]} - {clean_msg}")
-    await application.bot.send_message(chatid, msg)
+    await application.bot.send_message(chat_id, msg)
 
 
 # Telegram
@@ -517,14 +495,14 @@ async def telegram_send_message(context: ContextTypes.DEFAULT_TYPE, msg: str) ->
     clean_msg = msg.replace("\n", "  ")
     logging.info(f"{inspect.stack()[1][3]} - {clean_msg}")
     if bot := context.bot:
-        await bot.send_message(chatid, f"*ERROR:* {msg}")
+        await bot.send_message(chat_id, f"*ERROR:* {msg}")
 
 
 async def telegram_send_error(context: ContextTypes.DEFAULT_TYPE, msg: str) -> None:
     clean_msg = msg.replace("\n", "  ")
     logging.error(f"{inspect.stack()[1][3]} - {clean_msg}")
     if bot := context.bot:
-        await bot.send_message(chatid, f"*ERROR:* {msg}")
+        await bot.send_message(chat_id, f"*ERROR:* {msg}")
 
 
 async def telegram_send_reply_text(update: Update, msg: str) -> None:
@@ -542,13 +520,13 @@ async def telegram_send_reply_error(update: Update, msg: str) -> None:
 
 
 def its_me(update: Update) -> bool:
-    return str(update.effective_chat.id) == chatid if update.effective_chat else False
+    return str(update.effective_chat.id) == chat_id if update.effective_chat else False
 
 
 # Utils
 
 
-def clean_filename(filename) -> str:
+def clean_filename(filename: str) -> str:
     # replace spaces
     for r in " ":
         cleaned_filename = filename.replace(r, "_")
@@ -621,6 +599,45 @@ def parse_categoryIcon(category: int) -> str:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--token", dest="token", type=str, help="Your Telegram Bot Token", required=True
+    )
+    parser.add_argument(
+        "--chat_id",
+        dest="chat_id",
+        type=str,
+        help="Your Telegram Chat ID",
+        required=True,
+    )
+    parser.add_argument(
+        "--delay",
+        dest="delay",
+        type=int,
+        help="Seconds between each RSS fetching",
+        default=600,
+    )
+    parser.add_argument(
+        "--log_level",
+        dest="log_level",
+        help="Set the level of console logs",
+        choices=["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"],
+        default=logging.getLevelName(logging.INFO),
+    )
+    args = parser.parse_args()
+
+    global chat_id
+    global delay
+    global log_level
+
+    chat_id = args.chat_id
+    delay = args.delay
+    log_level = args.log_level
+
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=log_level
+    )
+
     defaults = Defaults(
         link_preview_options=LinkPreviewOptions(is_disabled=True),
         do_quote=True,
@@ -628,7 +645,7 @@ def main() -> None:
     )
     application = (
         Application.builder()
-        .token(token)
+        .token(args.token)
         .defaults(defaults)
         .post_init(post_init)
         .build()

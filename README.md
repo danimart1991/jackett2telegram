@@ -20,14 +20,13 @@ A Telegram Bot is needed that the script will connect to.
 
 You could use [this post](https://www.danielmartingonzalez.com/en/home-assistant-notifications-on-telegram/) to create your own with the [BotFather Telegram Bot](https://telegram.me/botfather).
 
-> Warning! Without chatID the bot wont be able to send automated messages and will only be able to respond to messages.
+> WARNING!! Without `chat_id` the bot wont be able to send automated messages and will only be able to respond to messages.
 
 ## Docker Installation
 
 ```bash
 $ docker create \
   --name=jackett2telegram \
-  -e DELAY=600 \
   -e TOKEN=<your_telegram_bot_token> \
   -e CHATID=<your_telegram_bot_chatid> \
   -v </path/to/host/config>:/app/config \
@@ -35,6 +34,8 @@ $ docker create \
   --restart unless-stopped \
   danimart1991/jackett2telegram
 ```
+
+You could include `-e DELAY=<delay>` where `<delay>` is the seconds between each RSS fetching.
 
 You could include `-e LOG_LEVEL=<log_level>` where `<log_level>` must be _critical_, _error_, _warning_, _info_ (default) or _debug_.
 
@@ -49,13 +50,15 @@ Python 3.X
    pip install -r requirements.txt
    ```
 
-3. Replace your `ChatID` and `Token` on the top of the script.
-4. Edit the delay (seconds).
 5. Run the script with:
 
    ```bash
-   python jackett2telegram.py
+   python jackett2telegram.py --token <YOUR_TELEGRAM_TOKEN> --chat_id <YOUR_TELEGRAM_CHAT_ID>
    ```
+
+You could include `--delay=<delay>` where `<delay>` is the seconds between each RSS fetching.
+
+You could include `--log_level=<log_level>` where `<log_level>` must be _critical_, _error_, _warning_, _info_ (default) or _debug_.
 
 ## Usage
 
