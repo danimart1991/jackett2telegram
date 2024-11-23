@@ -101,7 +101,7 @@ async def cmd_rss_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 f"Title: {helpers.escape_markdown(rss_name, 2)}"
                 + f"\nJacket RSS: `{helpers.escape_markdown(rss_props[0], 2)}`"
                 + f"\nLast article from: {helpers.escape_markdown(rss_props[1], 2)}"
-                + f"\nStatus: {('✔️' if rss_props[3] == 0 else '⚠')}"
+                + f"\nStatus: {('✔️' if rss_props[3] == 0 else '🚫' if rss_props[3] == 2 else '⚠️')}"
             )
 
     await telegram_send_reply_text(update, "\n\n".join(indexers))
@@ -114,7 +114,7 @@ async def cmd_rss_add(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not context.args or not len(context.args) == 2:
         await telegram_send_reply_error(
             update,
-            "To add a new _Jackett RSS_ the command needs to be:\n`/add TITLE JACKETT_RSS_FEED_URL`",
+            "To add a new _Jackett or Prowlarr RSS_ the command needs to be:\n`/add TITLE JACKETT_OR_PROWLARR_RSS_FEED_URL`",
         )
         return
 
@@ -126,12 +126,12 @@ async def cmd_rss_add(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     except ElementTree.ParseError:
         await telegram_send_reply_error(
             update,
-            "The link does not seem to be a _Jackett RSS Feed_ or is not supported\.",
+            "The link does not seem to be a _Jackett or Prowlarr RSS Feed_ or is not supported\.",
         )
         return
     except requests.exceptions.MissingSchema:
         await telegram_send_reply_error(
-            update, "The _Jackett RSS Feed Url_ is malformed\."
+            update, "The _Jackett or Prowlarr RSS Feed Url_ is malformed\."
         )
         return
 
@@ -157,7 +157,7 @@ async def cmd_rss_remove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not context.args or not len(context.args) == 1:
         await telegram_send_reply_error(
             update,
-            "To remove a _Jackett RSS_ the command needs to be:\n`/remove TITLE`",
+            "To remove a _Jackett or Prowlarr RSS_ the command needs to be:\n`/remove TITLE`",
         )
         return
 
@@ -171,7 +171,7 @@ async def cmd_rss_remove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if not (int(res) == 1):
             await telegram_send_reply_error(
                 update,
-                f"Can't remove _Jackett RSS_ with title _{escaped_indexer}_\. Not found\.",
+                f"Can't remove _Jackett or Prowlarr RSS_ with title _{escaped_indexer}_\. Not found\.",
             )
             return
         c.execute("DELETE FROM rss WHERE name = ?", q)
@@ -179,7 +179,7 @@ async def cmd_rss_remove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         conn.close()
     except sqlite3.Error:
         await telegram_send_reply_error(
-            update, "Can't remove the _Jackett RSS_ because of an unknown issue\."
+            update, "Can't remove the _Jackett or Prowlarr RSS_ because of an unknown issue\."
         )
         return
     rss_load()
@@ -194,18 +194,18 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     msg = (
-        "*Jackett2Telegram \(Jackett RSS to Telegram Bot\)*"
-        + "\n\nAfter successfully adding a Jackett RSS link, the bot starts fetching the feed every "
+        "*Jackett2Telegram \(Jackett and Prowlarr RSS to Telegram Bot\)*"
+        + "\n\nAfter successfully adding a Jackett or Prowlarr RSS link, the bot starts fetching the feed every "
         f"{str(delay)} seconds\. \(This can be set\)"
         + "\n\nTitles are used to easily manage RSS feeds and should contain only one word and are case sensitive\."
         + "\n\nCommands:"
         + "\n\- /help \- Posts this help message\. 😑"
-        + "\n\- /add TITLE JACKETT\_RSS\_FEED\_URL \- Adds new Jackett RSS Feed \(overwrited if title previously exist\)\."
+        + "\n\- /add TITLE JACKETT\_OR\_PROWLARR\_RSS\_FEED\_URL \- Adds new Jackett or Prowlarr RSS Feed \(overwrited if title previously exist\)\."
         + "\n\- /remove TITLE \- Removes the RSS link\."
-        + "\n\- /list \- Lists all the titles and the asociated Jackett RSS links from the DB\."
-        + "\n\- /test JACKETT\_RSS\_FEED\_URL \- Inbuilt command that fetches a post \(usually latest\) from a Jackett RSS\."
+        + "\n\- /list \- Lists all the titles and the asociated Jackett or Prowlarr RSS links from the DB\."
+        + "\n\- /test JACKETT\_OR\_PROWLARR\_RSS\_FEED\_URL \- Inbuilt command that fetches a post \(usually latest\) from a Jackett or Prowlarr RSS\."
         + "\n\nIn order to use *Blackhole*, your _Torrent_ client must support it and be configured to point to *Jackett2Telegram* _Blackhole_ folder\."
-        "\n\nIf you like the project, consider sponsorship on [GitHub](https://github\.com/danimart1991/jackett2telegram)\."
+        "\n\nIf you like the project, consider [BECOME A SPONSOR](https://github.com/sponsors/danimart1991)\."
     )
 
     if update.effective_message:
@@ -219,40 +219,52 @@ async def rss_monitor(context: ContextTypes.DEFAULT_TYPE) -> None:
         try:
             response = requests.get(rss_props[0])
             root = ElementTree.fromstring(response.content)
-            channel = root.find("channel")
-            items = channel.findall("item") if channel is not None else []
-            last_pubdate_datetime = pubDate_to_datetime(rss_props[1])
-            filteredItems = filter(
-                lambda item: pubDate_to_datetime(item.findtext("pubDate", ""))
-                >= last_pubdate_datetime,
-                items,
-            )
-            sortedFilteredItems = sorted(
-                filteredItems,
-                key=lambda item: pubDate_to_datetime(item.findtext("pubDate", "")),
-            )
+            if root.tag == "error":
+                code = root.attrib["code"]
+                description = root.attrib["description"]
+                if code == "410":
+                    logging.info(f"Indexer {rss_name} is disabled.")
+                    sqlite_write(rss_name, rss_props[0], rss_props[1], rss_props[2], 2)
+                else:
+                    raise Exception(f"{code}: {description}")
+            else:
+                channel = root.find("channel")
+                items = channel.findall("item") if channel is not None else []
+                last_pubdate_datetime = pubDate_to_datetime(rss_props[1])
+                filteredItems = filter(
+                    lambda item: pubDate_to_datetime(item.findtext("pubDate", ""))
+                    >= last_pubdate_datetime,
+                    items,
+                )
+                sortedFilteredItems = sorted(
+                    filteredItems,
+                    key=lambda item: pubDate_to_datetime(item.findtext("pubDate", "")),
+                )
 
-            if sortedFilteredItems:
-                last_items = eval(rss_props[2])
-                for item in sortedFilteredItems:
-                    item_guid = item.findtext("guid", "")
-                    if item_guid not in last_items:
-                        last_items.append(item_guid)
-                        await jackettitem_to_telegram(context, item, rss_name)
+                if sortedFilteredItems:
+                    last_items = eval(rss_props[2])
+                    for item in sortedFilteredItems:
+                        item_guid = item.findtext("guid", "")
+                        if item_guid not in last_items:
+                            last_items.append(item_guid)
+                            await jackettitem_to_telegram(context, item, rss_name)
 
-                itemsCount = len(items)
-                while len(last_items) > itemsCount:
-                    last_items.pop(0)
+                    itemsCount = len(items)
+                    while len(last_items) > itemsCount:
+                        last_items.pop(0)
 
-                new_pubdate = sortedFilteredItems[-1].findtext("pubDate", "")
-                sqlite_write(rss_name, rss_props[0], new_pubdate, str(last_items), 0)
-        except:
+                    new_pubdate = sortedFilteredItems[-1].findtext("pubDate", "")
+                    sqlite_write(
+                        rss_name, rss_props[0], new_pubdate, str(last_items), 0
+                    )
+        except Exception as exception:
+            # If not down yet, put down and send message.
             if rss_props[3] != 1:
-                msg = f"Indexer not available due to some issue: {helpers.escape_markdown(rss_name, 2)}"
+                msg = f"Indexer {helpers.escape_markdown(rss_name, 2)} not available due to some issue."
                 await context.bot.send_message(
                     chat_id, f"*ERROR:* {msg}", parse_mode="MARKDOWNV2"
                 )
-                logging.exception(msg)
+                logging.exception(f"{msg}: {exception}")
                 sqlite_write(rss_name, rss_props[0], rss_props[1], rss_props[2], 1)
             pass
 
@@ -266,7 +278,7 @@ async def cmd_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args or not context.args[0]:
         logging.error(f"User calls command /test with invalid arguments.")
         await telegram_send_reply_error(
-            update, "The format needs to be:\n`/test JACKETT\_RSS\_FEED\_URL`"
+            update, "The format needs to be:\n`/test JACKETT\_OR\_PROWLARR\_RSS\_FEED\_URL`"
         )
         return
 
@@ -281,12 +293,12 @@ async def cmd_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     except ElementTree.ParseError:
         await telegram_send_reply_error(
             update,
-            "The link does not seem to be a _Jackett RSS Feed_ or is not supported\.",
+            "The link does not seem to be a _Jackett or Prowlarr RSS Feed_ or is not supported\.",
         )
         return
     except requests.exceptions.MissingSchema:
         await telegram_send_reply_error(
-            update, "The _Jackett RSS Feed Url_ is malformed\."
+            update, "The _Jackett or Prowlarr RSS Feed Url_ is malformed\."
         )
         return
 

@@ -8,9 +8,11 @@
 [![Tip Me via PayPal](https://img.shields.io/badge/PayPal-tip%20me-blue?logo=paypal&style=flat)](https://www.paypal.me/danimart1991)
 [![Sponsor Me via GitHub](https://img.shields.io/badge/GitHub-sponsor%20me-blue?logo=github&style=flat)](https://github.com/sponsors/danimart1991)
 
-# Jackett RSS to Telegram Bot
+# Jackett (and Prowlarr) RSS to Telegram Bot
 
-A **self-hosted Telegram Python Bot** that dumps posts from **Jackett RSS feeds to a Telegram** chat. Based on [**RSS to Telegram bot**](https://github.com/BoKKeR/RSS-to-Telegram-Bot) by [_BoKKeR_](https://github.com/BoKKeR) (Thanks for your effort).
+A **self-hosted Telegram Python Bot** that dumps posts from **Jackett or Prowlarr RSS feeds to a Telegram** chat.
+
+Based on [**RSS to Telegram bot**](https://github.com/BoKKeR/RSS-to-Telegram-Bot) by [_BoKKeR_](https://github.com/BoKKeR) (Thanks for your effort).
 
 ![Image of the chat](https://github.com/danimart1991/jackett2telegram/blob/main/docs/images/example.png?raw=true)
 
@@ -64,19 +66,19 @@ You could include `--log_level=<log_level>` where `<log_level>` must be _critica
 
 Send `/help` command to the bot to get this message:
 
-> **Jackett2Telegram (Jackett RSS to Telegram Bot)**
+> **Jackett2Telegram (Jackett and Prowlarr RSS to Telegram Bot)**
 >
-> After successfully adding a Jackett RSS link, the bot starts fetching the feed every 600 seconds. (This can be set)
+> After successfully adding a Jackett or Prowlarr RSS link, the bot starts fetching the feed every 600 seconds. (This can be set)
 >
 > Titles are used to easily manage RSS feeds and should contain only one word and are case sensitive.
 >
 > Commands:
 >
 > - /help Posts this help message. 😑
-> - /add TITLE JACKETT_RSS_FEED_URL - Adds new Jackett RSS Feed (overwrited if title previously exist).
+> - /add TITLE JACKETT_OR_PROWLARR_RSS_FEED_URL - Adds new Jackett or Prowlarr RSS Feed (overwrited if title previously exist).
 > - /remove TITLE - Removes the RSS link.
-> - /list Lists all the titles and the asociated Jackett RSS links from the DB.
-> - /test JACKETT_RSS_FEED_URL - Inbuilt command that fetches a post (usually latest) from a Jackett RSS.
+> - /list Lists all the titles and the asociated Jackett or Prowlarr RSS links from the DB.
+> - /test JACKETT_OR_PROWLARR_RSS_FEED_URL - Inbuilt command that fetches a post (usually latest) from a Jackett or Prowlarr RSS.
 >
 > In order to use **Blackhole**, your _Torrent_ client must support it and be configured to point to **Jackett2Telegram** _Blackhole_ folder.
 >
@@ -84,11 +86,15 @@ Send `/help` command to the bot to get this message:
 
 ### How to add a new Indexer
 
-You could get the **Jackett RSS Feed Url** using the action button in Indexers list:
+You could get the **Jackett or Prowlarr RSS Feed Url** using the action button in Indexers list:
 
-![Jackett RSS Feed Button](https://github.com/danimart1991/jackett2telegram/blob/main/docs/images/rssfeed.png?raw=true)
+![Jackett RSS Feed Button](https://github.com/danimart1991/jackett2telegram/blob/main/docs/images/rssfeed-jackett.png?raw=true)
 
-Then paste the Url in the chat like `/add AnyTitle Pasted_RSSFeedURL` and send the message. The bot will reply with the result.
+You could get the **Prowlarr RSS Feed Url** using the action button in Indexers list:
+
+![Prowlarr RSS Feed Button](https://github.com/danimart1991/jackett2telegram/blob/main/docs/images/rssfeed-prowlarr.png?raw=true)
+
+Then paste the Url in the chat like `/add TITLE JACKETT_OR_PROWLARR_RSS_FEED_URL` and send the message. The bot will reply with the result.
 
 ### How to use Blackhole
 
