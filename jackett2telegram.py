@@ -260,7 +260,7 @@ async def rss_monitor(context: ContextTypes.DEFAULT_TYPE) -> None:
         except Exception as exception:
             # If not down yet, put down and send message.
             if rss_props[3] != 1:
-                msg = f"Indexer {helpers.escape_markdown(rss_name, 2)} not available due to some issue."
+                msg = f"Indexer {helpers.escape_markdown(rss_name, 2)} not available due to some issue\."
                 await context.bot.send_message(
                     chat_id, f"*ERROR:* {msg}", parse_mode="MARKDOWNV2"
                 )
@@ -432,7 +432,7 @@ async def cbq_to_blackhole(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         or not (reply_markup := message.reply_markup)
         or not (query := update.callback_query)
     ):
-        await telegram_send_error(context, "The message cannot be found.")
+        await telegram_send_error(context, "The message cannot be found\.")
         return
 
     await query.answer()
