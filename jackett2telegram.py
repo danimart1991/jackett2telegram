@@ -9,6 +9,7 @@ import unicodedata
 import xml.etree.ElementTree as ElementTree
 from datetime import datetime
 from telegram import (
+    Message,
     helpers,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -22,6 +23,7 @@ from telegram.ext import (
     ContextTypes,
     Defaults,
 )
+from telegram.ext.filters import MessageFilter
 from typing import Any
 from urllib import parse
 
@@ -35,6 +37,18 @@ rss_dict = {}
 
 escaped_backslash = helpers.escape_markdown("-", 2)
 char_limit = 255
+
+
+class TopicFilter(MessageFilter):
+    def filter(self, message: Message) -> bool | None:
+        if message_thread_id is None:
+            return True
+        return (
+            message.is_topic_message and message.message_thread_id == message_thread_id
+        )
+
+
+topic_filter = TopicFilter()
 
 
 # SQLITE
@@ -179,7 +193,8 @@ async def cmd_rss_remove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         conn.close()
     except sqlite3.Error:
         await telegram_send_reply_error(
-            update, "Can't remove the _Jackett or Prowlarr RSS_ because of an unknown issue\."
+            update,
+            "Can't remove the _Jackett or Prowlarr RSS_ because of an unknown issue\.",
         )
         return
     rss_load()
@@ -211,7 +226,9 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_message:
         await update.effective_message.reply_text(msg)
     elif context.bot:
-        await context.bot.send_message(chat_id, msg)
+        await context.bot.send_message(
+            chat_id, msg, message_thread_id=message_thread_id
+        )
 
 
 async def rss_monitor(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -262,7 +279,10 @@ async def rss_monitor(context: ContextTypes.DEFAULT_TYPE) -> None:
             if rss_props[3] != 1:
                 msg = f"Indexer {helpers.escape_markdown(rss_name, 2)} not available due to some issue\."
                 await context.bot.send_message(
-                    chat_id, f"*ERROR:* {msg}", parse_mode="MARKDOWNV2"
+                    chat_id,
+                    f"*ERROR:* {msg}",
+                    parse_mode="MARKDOWNV2",
+                    message_thread_id=message_thread_id,
                 )
                 logging.exception(f"{msg}: {exception}")
                 sqlite_write(rss_name, rss_props[0], rss_props[1], rss_props[2], 1)
@@ -278,7 +298,8 @@ async def cmd_test(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args or not context.args[0]:
         logging.error(f"User calls command /test with invalid arguments.")
         await telegram_send_reply_error(
-            update, "The format needs to be:\n`/test JACKETT\_OR\_PROWLARR\_RSS\_FEED\_URL`"
+            update,
+            "The format needs to be:\n`/test JACKETT\_OR\_PROWLARR\_RSS\_FEED\_URL`",
         )
         return
 
@@ -412,6 +433,7 @@ async def jackettitem_to_telegram(
                 photo=coverraw,
                 caption=message,
                 reply_markup=reply_markup,
+                message_thread_id=message_thread_id,
             )
             return
         # Error, most of the times is a Image 400 Bad Request, without reason.
@@ -420,7 +442,9 @@ async def jackettitem_to_telegram(
                 "Error sending release with cover. Trying to send without cover."
             )
 
-    await context.bot.send_message(chat_id, message, reply_markup=reply_markup)
+    await context.bot.send_message(
+        chat_id, message, reply_markup=reply_markup, message_thread_id=message_thread_id
+    )
 
 
 async def cbq_to_blackhole(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -497,7 +521,9 @@ async def post_init(application: Application) -> None:
     )
     clean_msg = msg.replace("\n", "  ")
     logging.info(f"{inspect.stack()[1][3]} - {clean_msg}")
-    await application.bot.send_message(chat_id, msg)
+    await application.bot.send_message(
+        chat_id, msg, message_thread_id=message_thread_id
+    )
 
 
 # Telegram
@@ -507,14 +533,18 @@ async def telegram_send_message(context: ContextTypes.DEFAULT_TYPE, msg: str) ->
     clean_msg = msg.replace("\n", "  ")
     logging.info(f"{inspect.stack()[1][3]} - {clean_msg}")
     if bot := context.bot:
-        await bot.send_message(chat_id, f"*ERROR:* {msg}")
+        await bot.send_message(
+            chat_id, f"*ERROR:* {msg}", message_thread_id=message_thread_id
+        )
 
 
 async def telegram_send_error(context: ContextTypes.DEFAULT_TYPE, msg: str) -> None:
     clean_msg = msg.replace("\n", "  ")
     logging.error(f"{inspect.stack()[1][3]} - {clean_msg}")
     if bot := context.bot:
-        await bot.send_message(chat_id, f"*ERROR:* {msg}")
+        await bot.send_message(
+            chat_id, f"*ERROR:* {msg}", message_thread_id=message_thread_id
+        )
 
 
 async def telegram_send_reply_text(update: Update, msg: str) -> None:
@@ -529,6 +559,15 @@ async def telegram_send_reply_error(update: Update, msg: str) -> None:
     logging.error(f"{inspect.stack()[1][3]} - {clean_msg}")
     if message := update.effective_message:
         await message.reply_text(f"*ERROR:* {msg}")
+
+
+async def topic_only_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Check if the message is in the desired topic
+    desired_topic_id = 123456  # Replace with your topic's ID
+    if update.message.message_thread_id == desired_topic_id:
+        await update.message.reply_text("This command works in this topic!")
+    else:
+        await update.message.reply_text("This command is not allowed in this topic.")
 
 
 def its_me(update: Update) -> bool:
@@ -613,14 +652,25 @@ def parse_categoryIcon(category: int) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--token", dest="token", type=str, help="Your Telegram Bot Token", required=True
+        "--token",
+        dest="token",
+        type=str,
+        help="Telegram Bot's unique authentication token.",
+        required=True,
     )
     parser.add_argument(
         "--chat_id",
         dest="chat_id",
         type=str,
-        help="Your Telegram Chat ID",
+        help="Unique identifier for the target chat or username of the target channel (in the format @channelusername); for supergroups, use the unique identifier.",
         required=True,
+    )
+    parser.add_argument(
+        "--message_thread_id",
+        dest="message_thread_id",
+        type=int,
+        help="Unique identifier for the target message thread (topic) of the forum; for forum supergroups only.",
+        default=None,
     )
     parser.add_argument(
         "--delay",
@@ -639,10 +689,12 @@ def main() -> None:
     args = parser.parse_args()
 
     global chat_id
+    global message_thread_id
     global delay
     global log_level
 
     chat_id = args.chat_id
+    message_thread_id = args.message_thread_id
     delay = args.delay
     log_level = args.log_level
 
@@ -663,11 +715,13 @@ def main() -> None:
         .build()
     )
 
-    application.add_handler(CommandHandler("add", cmd_rss_add))
-    application.add_handler(CommandHandler("help", cmd_help))
-    application.add_handler(CommandHandler("test", cmd_test))
-    application.add_handler(CommandHandler("list", cmd_rss_list))
-    application.add_handler(CommandHandler("remove", cmd_rss_remove))
+    application.add_handler(CommandHandler("add", cmd_rss_add, filters=topic_filter))
+    application.add_handler(CommandHandler("help", cmd_help, filters=topic_filter))
+    application.add_handler(CommandHandler("test", cmd_test, filters=topic_filter))
+    application.add_handler(CommandHandler("list", cmd_rss_list, filters=topic_filter))
+    application.add_handler(
+        CommandHandler("remove", cmd_rss_remove, filters=topic_filter)
+    )
     application.add_handler(CallbackQueryHandler(cbq_to_blackhole))
 
     # Try to create a database if missing

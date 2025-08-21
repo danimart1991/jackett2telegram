@@ -11,10 +11,14 @@ COPY . /app
 RUN pip install --trusted-host pypi.python.org -r /app/requirements.txt
 
 # Define environment variable
-ENV TOKEN X
-ENV CHATID X
-ENV DELAY 600
-ENV LOG_LEVEL INFO
+ENV TOKEN=X
+ENV CHATID=X
+ENV MESSAGE_THREAD_ID=""
+ENV DELAY=600
+ENV LOG_LEVEL=INFO
 
-# Run app.py when the container launches
-CMD ["sh", "-c", "python jackett2telegram.py --token ${TOKEN} --chat_id ${CHATID} --delay ${DELAY} --log_level ${LOG_LEVEL}"]
+# Make entrypoint script executable
+RUN chmod +x /app/docker-entrypoint.sh
+
+# Run entrypoint script when container launches
+CMD ["/app/docker-entrypoint.sh"]
