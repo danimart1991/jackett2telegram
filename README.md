@@ -37,10 +37,6 @@ $ docker create \
   danimart1991/jackett2telegram
 ```
 
-You could include `-e DELAY=<delay>` where `<delay>` is the seconds between each RSS fetching.
-
-You could include `-e LOG_LEVEL=<log_level>` where `<log_level>` must be _critical_, _error_, _warning_, _info_ (default) or _debug_.
-
 ## Manual Installation
 
 Python 3.X
@@ -52,15 +48,23 @@ Python 3.X
    pip install -r requirements.txt
    ```
 
-5. Run the script with:
+3. Run the script with:
 
    ```bash
    python jackett2telegram.py --token <YOUR_TELEGRAM_TOKEN> --chat_id <YOUR_TELEGRAM_CHAT_ID>
    ```
 
-You could include `--delay=<delay>` where `<delay>` is the seconds between each RSS fetching.
+## Optional Parameters
 
-You could include `--log_level=<log_level>` where `<log_level>` must be _critical_, _error_, _warning_, _info_ (default) or _debug_.
+The following parameters can be used in both Docker (as environment variables) and Manual installation (as command line arguments):
+
+| Docker Env          | Command Line Arg      | Description                                                                                      | Default |
+| ------------------- | --------------------- | ------------------------------------------------------------------------------------------------ | ------- |
+| `MESSAGE_THREAD_ID` | `--message_thread_id` | Unique identifier for the target message thread (topic) of the forum; for forum supergroups only | -       |
+| `DELAY`             | `--delay`             | Seconds between each RSS fetching                                                                | 600     |
+| `LOG_LEVEL`         | `--log_level`         | Log level (_critical_, _error_, _warning_, _info_, _debug_)                                      | info    |
+
+> Note: `MESSAGE_THREAD_ID` is optional. If you run the Docker image you can leave the environment variable empty (for example `ENV MESSAGE_THREAD_ID=""`) and the container entrypoint will omit the `--message_thread_id` argument. Only set `MESSAGE_THREAD_ID` (or pass `--message_thread_id` when running manually) when you need to target a specific forum topic in a supergroup.
 
 ## Usage
 
