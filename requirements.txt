@@ -1,2 +1,2 @@
 requests~=2.31
-python-telegram-bot[job-queue]~=22.3
+python-telegram-bot[job-queue,rate-limiter]~=22.3

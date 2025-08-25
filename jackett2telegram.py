@@ -1,12 +1,12 @@
 import inspect
-import argparse
 import logging
-import requests
 import os
+import requests
 import sqlite3
 import string
 import unicodedata
-import xml.etree.ElementTree as ElementTree
+
+from argparse import ArgumentParser
 from datetime import datetime
 from telegram import (
     Message,
@@ -17,6 +17,7 @@ from telegram import (
     Update,
 )
 from telegram.ext import (
+    AIORateLimiter,
     Application,
     CallbackQueryHandler,
     CommandHandler,
@@ -26,6 +27,7 @@ from telegram.ext import (
 from telegram.ext.filters import MessageFilter
 from typing import Any
 from urllib import parse
+from xml.etree import ElementTree
 
 blackhole_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "blackhole")
 config_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "config")
@@ -125,7 +127,7 @@ async def cmd_rss_add(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not its_me(update):
         return
 
-    if not context.args or not len(context.args) == 2:
+    if not context.args or len(context.args) != 2:
         await telegram_send_reply_error(
             update,
             "To add a new _Jackett or Prowlarr RSS_ the command needs to be:\n`/add TITLE JACKETT_OR_PROWLARR_RSS_FEED_URL`",
@@ -168,7 +170,7 @@ async def cmd_rss_remove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not its_me(update):
         return
 
-    if not context.args or not len(context.args) == 1:
+    if not context.args or len(context.args) != 1:
         await telegram_send_reply_error(
             update,
             "To remove a _Jackett or Prowlarr RSS_ the command needs to be:\n`/remove TITLE`",
@@ -182,7 +184,7 @@ async def cmd_rss_remove(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     try:
         c.execute("SELECT count(*) FROM rss WHERE name = ?", q)
         res = c.fetchall()[0][0]
-        if not (int(res) == 1):
+        if int(res) != 1:
             await telegram_send_reply_error(
                 update,
                 f"Can't remove _Jackett or Prowlarr RSS_ with title _{escaped_indexer}_\. Not found\.",
@@ -239,7 +241,7 @@ async def rss_monitor(context: ContextTypes.DEFAULT_TYPE) -> None:
             if root.tag == "error":
                 code = root.attrib["code"]
                 description = root.attrib["description"]
-                if code == "410":
+                if code == "410" or code == "429":
                     logging.info(f"Indexer {rss_name} is disabled.")
                     sqlite_write(rss_name, rss_props[0], rss_props[1], rss_props[2], 2)
                 else:
@@ -286,7 +288,6 @@ async def rss_monitor(context: ContextTypes.DEFAULT_TYPE) -> None:
                 )
                 logging.exception(f"{msg}: {exception}")
                 sqlite_write(rss_name, rss_props[0], rss_props[1], rss_props[2], 1)
-            pass
 
     rss_load()
 
@@ -570,6 +571,10 @@ async def topic_only_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("This command is not allowed in this topic.")
 
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logging.error("Exception while handling an update:", exc_info=context.error)
+
+
 def its_me(update: Update) -> bool:
     return str(update.effective_chat.id) == chat_id if update.effective_chat else False
 
@@ -578,9 +583,8 @@ def its_me(update: Update) -> bool:
 
 
 def clean_filename(filename: str) -> str:
-    # replace spaces
-    for r in " ":
-        cleaned_filename = filename.replace(r, "_")
+    # replace spaces by underscores
+    cleaned_filename = filename.replace(" ", "_")
 
     # keep only valid ascii chars
     cleaned_filename = (
@@ -710,7 +714,9 @@ def main() -> None:
     application = (
         Application.builder()
         .token(args.token)
+        .concurrent_updates(True)
         .defaults(defaults)
+        .rate_limiter(rate_limiter=AIORateLimiter())
         .post_init(post_init)
         .build()
     )
@@ -729,14 +735,15 @@ def main() -> None:
         init_sqlite()
     except sqlite3.OperationalError:
         logging.exception("Fail trying to create the Database.")
-        pass
 
     rss_load()
 
     if job_queue := application.job_queue:
         job_queue.run_repeating(rss_monitor, delay)
 
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    application.add_error_handler(error_handler)
+
+    application.run_polling()
     conn.close()
 
 
