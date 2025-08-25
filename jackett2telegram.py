@@ -654,7 +654,7 @@ def parse_categoryIcon(category: int) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = ArgumentParser()
     parser.add_argument(
         "--token",
         dest="token",
