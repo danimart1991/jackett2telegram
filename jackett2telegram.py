@@ -24,8 +24,10 @@ from telegram.ext import (
     ContextTypes,
     Defaults,
 )
+from telegram.error import RetryAfter, TimedOut, NetworkError
 from telegram.ext.filters import MessageFilter
 from typing import Any
+import asyncio
 from urllib import parse
 from xml.etree import ElementTree
 
@@ -233,6 +235,46 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
 
 
+async def send_item_with_retry(
+    context: ContextTypes.DEFAULT_TYPE,
+    item: ElementTree.Element,
+    rss_name: str,
+    max_retries: int = 5,
+) -> bool:
+    """
+    Attempts to send an item to Telegram with retries in case of rate limiting.
+    Returns True if the send was successful, False otherwise.
+    """
+    for attempt in range(max_retries):
+        try:
+            await jackettitem_to_telegram(context, item, rss_name)
+            return True
+        except RetryAfter as e:
+            wait_time = e.retry_after + 1  # Add 1 extra second as margin
+            logging.warning(
+                f"Rate limited. Waiting {wait_time} seconds before retry {attempt + 1}/{max_retries}"
+            )
+            await asyncio.sleep(wait_time)
+        except TimedOut:
+            wait_time = 5 * (attempt + 1)  # Simple exponential backoff
+            logging.warning(
+                f"Request timed out. Waiting {wait_time} seconds before retry {attempt + 1}/{max_retries}"
+            )
+            await asyncio.sleep(wait_time)
+        except NetworkError as e:
+            wait_time = 10 * (attempt + 1)
+            logging.warning(
+                f"Network error: {e}. Waiting {wait_time} seconds before retry {attempt + 1}/{max_retries}"
+            )
+            await asyncio.sleep(wait_time)
+        except Exception as e:
+            logging.error(f"Unexpected error sending item: {e}")
+            return False
+    
+    logging.error(f"Failed to send item after {max_retries} retries")
+    return False
+
+
 async def rss_monitor(context: ContextTypes.DEFAULT_TYPE) -> None:
     for rss_name, rss_props in rss_dict.items():
         try:
@@ -250,42 +292,64 @@ async def rss_monitor(context: ContextTypes.DEFAULT_TYPE) -> None:
                 channel = root.find("channel")
                 items = channel.findall("item") if channel is not None else []
                 last_pubdate_datetime = pubDate_to_datetime(rss_props[1])
-                filteredItems = filter(
-                    lambda item: pubDate_to_datetime(item.findtext("pubDate", ""))
-                    >= last_pubdate_datetime,
+                filtered_items = filter(
+                    lambda item, lpd=last_pubdate_datetime: pubDate_to_datetime(item.findtext("pubDate", ""))
+                    >= lpd,
                     items,
                 )
-                sortedFilteredItems = sorted(
-                    filteredItems,
+                sorted_filtered_items = sorted(
+                    filtered_items,
                     key=lambda item: pubDate_to_datetime(item.findtext("pubDate", "")),
                 )
 
-                if sortedFilteredItems:
+                if sorted_filtered_items:
                     last_items = eval(rss_props[2])
-                    for item in sortedFilteredItems:
+                    items_count = len(items)
+                    
+                    for item in sorted_filtered_items:
                         item_guid = item.findtext("guid", "")
                         if item_guid not in last_items:
-                            last_items.append(item_guid)
-                            await jackettitem_to_telegram(context, item, rss_name)
-
-                    itemsCount = len(items)
-                    while len(last_items) > itemsCount:
-                        last_items.pop(0)
-
-                    new_pubdate = sortedFilteredItems[-1].findtext("pubDate", "")
-                    sqlite_write(
-                        rss_name, rss_props[0], new_pubdate, str(last_items), 0
-                    )
+                            # Try to send the message with retries for rate limiting
+                            send_success = await send_item_with_retry(
+                                context, item, rss_name
+                            )
+                            
+                            if send_success:
+                                # Save state immediately after each successful send
+                                last_items.append(item_guid)
+                                while len(last_items) > items_count:
+                                    last_items.pop(0)
+                                new_pubdate = item.findtext("pubDate", "")
+                                sqlite_write(
+                                    rss_name, rss_props[0], new_pubdate, str(last_items), 0
+                                )
+                            else:
+                                # If it fails after retries, stop this feed and continue with the next one
+                                logging.warning(
+                                    f"Failed to send item from {rss_name} after retries, stopping this feed for now"
+                                )
+                                break
+                        
+                        # Small pause between messages to avoid rate limiting
+                        await asyncio.sleep(1.0)
+                    
+                    # Mark indexer as active if it wasn't
+                    if rss_props[3] != 0:
+                        sqlite_write(rss_name, rss_props[0], rss_props[1], str(last_items), 0)
+                        
         except Exception as exception:
             # If not down yet, put down and send message.
             if rss_props[3] != 1:
                 msg = f"Indexer {helpers.escape_markdown(rss_name, 2)} not available due to some issue\."
-                await context.bot.send_message(
-                    chat_id,
-                    f"*ERROR:* {msg}",
-                    parse_mode="MARKDOWNV2",
-                    message_thread_id=message_thread_id,
-                )
+                try:
+                    await context.bot.send_message(
+                        chat_id,
+                        f"*ERROR:* {msg}",
+                        parse_mode="MARKDOWNV2",
+                        message_thread_id=message_thread_id,
+                    )
+                except (RetryAfter, TimedOut, NetworkError) as e:
+                    logging.error(f"Could not send error message due to: {e}")
                 logging.exception(f"{msg}: {exception}")
                 sqlite_write(rss_name, rss_props[0], rss_props[1], rss_props[2], 1)
 
@@ -711,12 +775,24 @@ def main() -> None:
         do_quote=True,
         parse_mode="MARKDOWNV2",
     )
+    # Configure rate limiter with conservative limits to avoid 429 errors
+    # max_retries: retries in case of rate limit
+    # overall_max_rate: maximum messages per second globally
+    # overall_time_period: time period for global rate limit
+    # group_max_rate: maximum messages per minute in groups
+    rate_limiter = AIORateLimiter(
+        max_retries=5,
+        overall_max_rate=25,  # 25 messages per period (conservative vs 30 allowed)
+        overall_time_period=1,  # per second
+        group_max_rate=15,  # 15 messages per minute in groups (conservative vs 20 allowed)
+        group_time_period=60,
+    )
     application = (
         Application.builder()
         .token(args.token)
         .concurrent_updates(True)
         .defaults(defaults)
-        .rate_limiter(rate_limiter=AIORateLimiter())
+        .rate_limiter(rate_limiter=rate_limiter)
         .post_init(post_init)
         .build()
     )
